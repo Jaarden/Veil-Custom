@@ -128,6 +128,11 @@ Walk them through getting each key:
     the following days.
   - If **no**: leave both empty.
 - **WEATHER_CITY** (optional): a city name. It can also be set later on the TV in the Veil menu.
+- **UPDATE_CHECK**: **ask the person** whether Veil may check for updates. If yes (the default), once a
+  day Veil asks GitHub's public API for the date of its latest code change and, if it's newer than their
+  build, shows a small dot on the "veil" button and an "Update available" row in the Veil menu (never a
+  popup). Nothing about them is sent; GitHub only sees an IP address. If no, set `UPDATE_CHECK=false`. It
+  can be switched later in the Veil menu.
 
 Changing keys means rebuilding (they're compiled into the app). Never commit or share `keys.properties`;
 it's already listed in `source/.gitignore`.
@@ -233,7 +238,31 @@ Before lite mode, or instead of it, the person can lower **Trails** and **Glow**
 
 ---
 
-## 7. If you change the code
+## 7. Updating Veil
+
+When the person asks to update Veil (the Veil menu says "Update available"), on **the same computer** that
+built it (the signing key lives there):
+
+1. **Get the new code:** `git pull` in this repo. If they changed files themselves, show them what
+   `git pull` would overwrite and ask first. If they downloaded a ZIP instead of cloning, download the new
+   ZIP and copy their `source/keys.properties` and `source/local.properties` into it.
+2. **Read what changed** (`git log --oneline` since their version) and tell them in a sentence or two.
+   If `keys.properties.example` gained new lines, ask about those keys (the old ones stay as they are).
+3. **Build:** `./gradlew assembleRelease` with their existing `keys.properties` (Windows: run again if
+   `classes.dex` is locked).
+4. **Find the TV:** the wireless-debugging port changes after a reboot, so reconnect with
+   `adb mdns services` / `adb connect <ip:port>` if needed.
+5. **Ask, then install:** `adb install -r app/build/outputs/apk/release/app-release.apk`.
+   An update keeps everything: permissions, home screen, screensaver, tracker sign-in and settings. No grants
+   need redoing. Never uninstall to "fix" an update; if it fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`,
+   see Troubleshooting and ask before uninstalling (that resets everything).
+6. **Check:** Home still opens Veil, and the dot on the "veil" button is gone.
+
+The section-0 rules still apply: don't press buttons on the TV while they use it, no force-stop.
+
+---
+
+## 8. If you change the code
 
 Rules that keep Veil smooth on weak TV GPUs:
 - **Pre-render anything full-screen.** Live full-screen gradients, `RenderEffect` blur and non-standard

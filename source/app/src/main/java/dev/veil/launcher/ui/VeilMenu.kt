@@ -125,6 +125,11 @@ fun VeilMenuAnchor(state: LauncherState) {
                     VeilIcons.ChevronDown, contentDescription = "Menu", modifier = Modifier.size(11.dp),
                     tint = LocalContentColor.current.copy(alpha = 0.7f),
                 )
+                // A newer Veil is on GitHub: a small accent dot, like an unread badge. Details in the menu.
+                if (state.availableUpdate != null) {
+                    Spacer(Modifier.width(5.dp))
+                    Box(Modifier.size(6.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Veil.Accent))
+                }
             }
         }
         Box(Modifier.floatingBelow(40.dp)) {
@@ -176,15 +181,25 @@ private fun VeilPanel(state: LauncherState, firstItem: FocusRequester) {
     val current = ThemeState.current
     val vizButton = remember { FocusRequester() }
     val weatherButton = remember { FocusRequester() }
+    val updateButton = remember { FocusRequester() }
     // The panel stays built between opens; start each open scrolled to the top, as before.
     val scroll = rememberScrollState()
     LaunchedEffect(state.veilMenuOpen) { if (!state.veilMenuOpen) scroll.scrollTo(0) }
     // After a window opened from this menu closes, put focus back on the button that opened it.
     LaunchedEffect(state.menuReturn) {
-        val target = when (state.menuReturn) { "viz" -> vizButton; "weather" -> weatherButton; else -> null }
+        val target = when (state.menuReturn) {
+            "viz" -> vizButton
+            "weather" -> weatherButton
+            "update" -> updateButton
+            // "Hide until the next update": move focus off the row first, then remove it. Removing the
+            // focused row first would leave the menu without focus, which closes it.
+            "update-hide" -> firstItem
+            else -> null
+        }
         if (target != null) {
             delay(80)
             runCatching { target.requestFocus() }
+            if (state.menuReturn == "update-hide") { withFrameNanos { }; state.hideUpdate() }
             state.menuReturn = null
         }
     }
@@ -205,6 +220,17 @@ private fun VeilPanel(state: LauncherState, firstItem: FocusRequester) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text("veil", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.8).sp)
             Text("Private by design · no ads · no tracking", fontSize = 9.sp, color = Veil.Text.copy(alpha = 0.6f))
+        }
+
+        // A newer Veil on GitHub: a short row; OK opens the details window, where you decide.
+        state.availableUpdate?.let { u ->
+            MenuButton(
+                icon = VeilIcons.Sparkle,
+                title = "Update available",
+                subtitle = "${ago(u.time).replaceFirstChar { it.uppercase() }} · OK for details",
+                modifier = Modifier.focusRequester(updateButton),
+                onClick = { state.updateDialog = true },
+            )
         }
 
         // Ambient
@@ -317,7 +343,29 @@ private fun VeilPanel(state: LauncherState, firstItem: FocusRequester) {
             )
         }
 
+        // Update check (one small request a day to GitHub's public API)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionLabel("UPDATES")
+            MenuButton(
+                icon = VeilIcons.Sparkle,
+                title = "Check for updates: " + if (state.updateCheck) "on" else "off",
+                subtitle = "Once a day, asks GitHub if a newer Veil is out. Nothing about you is sent",
+                onClick = state::toggleUpdateCheck,
+            )
+        }
+
         Text("Back to close", fontSize = 8.5.sp, color = Veil.Text.copy(alpha = 0.45f))
+    }
+}
+
+/** "today", "yesterday", "3 days ago", "2 weeks ago". */
+private fun ago(time: Long): String {
+    val days = ((System.currentTimeMillis() - time) / 86_400_000L).coerceAtLeast(0)
+    return when {
+        days == 0L -> "today"
+        days == 1L -> "yesterday"
+        days < 14 -> "$days days ago"
+        else -> "${days / 7} weeks ago"
     }
 }
 
@@ -423,6 +471,57 @@ private fun ThemeBubble(theme: VeilThemeSpec, selected: Boolean, onClick: () -> 
             }
         }
     }
+}
+
+/** Details of a newer Veil, and the choice: remind me later, or hide until the next update. */
+@Composable
+fun UpdateDialog(state: LauncherState) {
+    val u = state.availableUpdate
+    val later = remember { FocusRequester() }
+    val close = { state.updateDialog = false; state.menuReturn = "update" }
+    if (u == null) { LaunchedEffect(Unit) { close() }; return }
+    val yours = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy")
+        .format(java.time.Instant.ofEpochSecond(dev.veil.launcher.BuildConfig.SOURCE_TIME).atZone(java.time.ZoneId.systemDefault()))
+    Dialog(onDismissRequest = { Sfx.back(); close() }) {
+        Column(
+            Modifier.width(400.dp).clip(RoundedCornerShape(20.dp)).background(Veil.Sheet)
+                .border(1.dp, Veil.Line, RoundedCornerShape(20.dp)).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("UPDATE AVAILABLE", fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, color = Veil.Accent)
+            Text("A newer Veil is out", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp)
+            Text(
+                "Published ${ago(u.time)}. Yours is from $yours.",
+                fontSize = 10.sp, color = Veil.Text.copy(alpha = 0.6f),
+            )
+            if (u.title.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                SectionLabel("WHAT'S NEW")
+                Text(u.title, fontSize = 12.sp, lineHeight = 17.sp)
+            }
+            Spacer(Modifier.height(2.dp))
+            SectionLabel("HOW TO UPDATE")
+            Text(
+                "Ask your AI agent to \"update Veil\" on the computer you installed it from. It follows the " +
+                    "Updating Veil steps in AGENT_INSTALL.md. Your settings and sign-in stay as they are.",
+                fontSize = 11.sp, lineHeight = 16.sp, color = Veil.Text.copy(alpha = 0.8f),
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Pill(
+                    onClick = { close() }, padding = PaddingValues(horizontal = 16.dp, vertical = 7.dp),
+                    modifier = Modifier.focusRequester(later),
+                ) { Text("Remind me later", fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
+                Pill(
+                    // The menu hides it once focus has moved off the row (see VeilPanel).
+                    onClick = { state.updateDialog = false; state.menuReturn = "update-hide" },
+                    padding = PaddingValues(horizontal = 16.dp, vertical = 7.dp),
+                ) { Text("Hide until the next update", fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
+            }
+            Text("Back to close", fontSize = 8.5.sp, color = Veil.Text.copy(alpha = 0.45f))
+        }
+    }
+    LaunchedEffect(Unit) { delay(120); runCatching { later.requestFocus() } }
 }
 
 /** Weather location search: the TV keyboard (with voice) opens right away; results update as you type. */

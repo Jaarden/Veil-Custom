@@ -290,8 +290,61 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
         scope.launch { delay(6_000); if (dnsMessage == msg) dnsMessage = null }
     }
 
+    // ---- "Update available" (Veil menu row + a dot on the "veil" button; never a popup) -----------
+
+    /** Daily check for a newer Veil on GitHub. Default from the build (UPDATE_CHECK), switchable on the TV. */
+    var updateCheck by mutableStateOf(prefs.getBoolean("update_check", BuildConfig.UPDATE_CHECK))
+        private set
+    private var latestUpdate by mutableStateOf(
+        prefs.getString("update_sha", null)?.let {
+            dev.veil.launcher.data.UpdateCheck.Update(it, prefs.getLong("update_time", 0), prefs.getString("update_title", "").orEmpty())
+        },
+    )
+    /** "Hide until the next update" belongs to the build it was chosen on; a reinstall shows it again. */
+    private var hiddenUpdate by mutableStateOf(
+        prefs.getString("update_hidden", null)?.takeIf { prefs.getLong("update_hidden_src", 0) == BuildConfig.SOURCE_TIME },
+    )
+    /** The bigger "Update available" window, opened from the Veil menu row. */
+    var updateDialog by mutableStateOf(false)
+
+    /**
+     * The newer version to mention, if any. "Newer" means changed on GitHub well after this build's own
+     * source (2 h of slack: the public commit is made a little after the code it publishes).
+     */
+    val availableUpdate: dev.veil.launcher.data.UpdateCheck.Update?
+        get() = latestUpdate?.takeIf {
+            updateCheck && it.sha != hiddenUpdate && it.time > BuildConfig.SOURCE_TIME * 1000 + 2 * 3600_000L
+        }
+
+    fun toggleUpdateCheck() {
+        updateCheck = !updateCheck
+        prefs.edit().putBoolean("update_check", updateCheck).putLong("update_checked", 0).apply()
+        if (updateCheck) checkForUpdate()
+    }
+
+    /** "Hide until the next update": forgets this one; a newer commit shows again. */
+    fun hideUpdate() {
+        hiddenUpdate = latestUpdate?.sha
+        prefs.edit().putString("update_hidden", hiddenUpdate).putLong("update_hidden_src", BuildConfig.SOURCE_TIME).apply()
+    }
+
+    /** At most once a day, never in the first minutes after boot, silent on any failure. */
+    private fun checkForUpdate() {
+        if (!updateCheck) return
+        val now = System.currentTimeMillis()
+        if (android.os.SystemClock.elapsedRealtime() < 3 * 60_000L) return
+        if (now - prefs.getLong("update_checked", 0) < 24 * 3600_000L) return
+        prefs.edit().putLong("update_checked", now).apply()
+        scope.launch {
+            val u = withContext(Dispatchers.IO) { dev.veil.launcher.data.UpdateCheck.latest() } ?: return@launch
+            latestUpdate = u
+            prefs.edit().putString("update_sha", u.sha).putLong("update_time", u.time).putString("update_title", u.title).apply()
+        }
+    }
+
     /** Weather every 30 min, blocked counter every 5 min. Cheap to call often. */
     fun refreshExtras() {
+        checkForUpdate()
         dnsOn = dns.isOn
         dnsResumeAt = dns.resumeAt
         val now = System.currentTimeMillis()
@@ -506,7 +559,7 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
     /** Music playing: ambient after 30 s idle on Home. Otherwise after 5 min. */
     fun checkIdle() {
         if (ambient || screen != Screen.HOME || sheet != null || privacySheet || musicSheet || weatherPicker ||
-            vizSettingsOpen || watchSheet != null
+            vizSettingsOpen || updateDialog || watchSheet != null
         ) return
         val idle = System.currentTimeMillis() - lastInput
         val playing = nowPlaying.track?.playing == true

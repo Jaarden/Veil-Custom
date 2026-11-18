@@ -85,10 +85,20 @@ A TV can't ask for these with a pop-up, so they're granted over ADB (the install
   - **Open-Meteo**: your chosen city, for the weather.
   - **LRCLIB**: the song currently playing (title, artist, album, length), to get lyrics.
   - **NextDNS API**: your blocked-tracker stats, if set up.
+  - **GitHub**: once a day, asks for the date of Veil's latest code change, to show "update available"
+    in the Veil menu. Nothing about you is sent. Switch it off in the Veil menu, or with
+    `UPDATE_CHECK=false` in `keys.properties`.
 - **Your tracker login** stays on the TV, in Veil's private storage (excluded from Android backups).
   Switching to another tracker signs Veil out of the old one.
 - **DNS blocking is off until you turn it on.** It uses Android's built-in Private DNS, so it covers every
   app on the TV, and it can be paused or switched off at any time.
+
+## Updating
+
+When a newer Veil is out, a small dot appears on the "veil" button and the Veil menu says **Update
+available**. Ask your AI agent to update Veil: it follows the *Updating Veil* section of
+[`AGENT_INSTALL.md`](AGENT_INSTALL.md) (pull, rebuild on the same computer, install over the old one). Your
+permissions, sign-in and settings stay as they are.
 
 ## Undo
 

@@ -16,3 +16,6 @@ NEXTDNS_PROFILE=
 NEXTDNS_API_KEY=
 # Optional: default weather city (can also be changed on the TV in the Veil menu)
 WEATHER_CITY=
+# Optional: "update available" in the Veil menu (one request a day to GitHub's public API, nothing about
+# you is sent). true by default; false turns it off. It can also be switched on the TV.
+UPDATE_CHECK=true
