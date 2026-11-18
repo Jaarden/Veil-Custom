@@ -16,9 +16,24 @@ object ContinueWatching {
     private const val MAX_ITEMS = 10
     private const val MAX_UP_NEXT_SHOWS = 10
     /** An episode counts as "NEW" for two weeks after it airs (if you haven't watched the show since). */
-    private const val NEW_WINDOW_MS = 14L * 24 * 3600 * 1000
+    internal const val NEW_WINDOW_MS = 14L * 24 * 3600 * 1000
 
-    suspend fun load(trakt: Trakt, tmdb: Tmdb): List<WatchItem> = coroutineScope {
+    /**
+     * Adds TMDB artwork to any tracker's items. Items without a TMDB id (Simkl often sends only IMDb/TVDB
+     * ids) are looked up through TMDB's /find first.
+     */
+    suspend fun withArt(items: List<WatchItem>, tmdb: Tmdb): List<WatchItem> = coroutineScope {
+        items.map { item ->
+            async {
+                val id = item.tmdb ?: runCatching { tmdb.find(item.isMovie, item.imdb, item.tvdb) }.getOrNull()
+                    ?: return@async item
+                val art = runCatching { tmdb.art(item.isMovie, id) }.getOrNull() ?: return@async item.copy(tmdb = id)
+                item.copy(tmdb = id, backdrop = art.backdrop, thumb = art.thumb, logo = art.logo, poster = art.poster)
+            }
+        }.awaitAll()
+    }
+
+    suspend fun load(trakt: Trakt): List<WatchItem> = coroutineScope {
         val playback = parsePlayback(JSONArray(trakt.get("/sync/playback?limit=30&extended=full")))
         val pausedShows = playback.filter { !it.isMovie }.mapNotNull { it.traktId }.toSet()
         // Shows you removed from Continue Watching (Trakt "hidden from progress") stay out of Up Next.
@@ -63,19 +78,15 @@ object ContinueWatching {
             }
         }.awaitAll().filterNotNull()
 
-        val merged = (playback + upNext)
+        merge(playback, upNext)
+    }
+
+    /** Paused items and next episodes together: newest first, one entry per show/movie, at most [MAX_ITEMS]. */
+    fun merge(playback: List<WatchItem>, upNext: List<WatchItem>): List<WatchItem> =
+        (playback + upNext)
             .sortedByDescending { it.sortTime }
             .distinctBy { it.key }
             .take(MAX_ITEMS)
-
-        merged.map { item ->
-            async {
-                val id = item.tmdb ?: return@async item
-                val art = runCatching { tmdb.art(item.isMovie, id) }.getOrNull() ?: return@async item
-                item.copy(backdrop = art.backdrop, thumb = art.thumb, logo = art.logo, poster = art.poster)
-            }
-        }.awaitAll()
-    }
 
     private fun parsePlayback(arr: JSONArray): List<WatchItem> {
         val out = ArrayList<WatchItem>()
@@ -128,6 +139,6 @@ object ContinueWatching {
         )
     }
 
-    private fun time(iso: String?): Long =
+    internal fun time(iso: String?): Long =
         iso?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() } ?: 0L
 }

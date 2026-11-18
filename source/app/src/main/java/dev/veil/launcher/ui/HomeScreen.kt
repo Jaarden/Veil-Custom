@@ -300,12 +300,12 @@ private fun ContinueRow(state: LauncherState, focusKey: (String) -> FocusRequest
         ) {
             when {
                 !state.connected -> item {
-                    MessagePill("Connect Trakt", "Show what you're watching in Nuvio", state::startConnect)
+                    MessagePill("Connect a tracker", "Trakt, Simkl or MDBList: show what you're watching", state::startConnect)
                 }
                 state.items.isEmpty() -> item {
                     MessagePill(
                         if (state.loading) "Loading…" else (state.error ?: "Nothing in progress"),
-                        if (state.loading) "Fetching from Trakt" else "Start something in Nuvio",
+                        if (state.loading) "Fetching from ${state.service.title}" else "Start something in ${state.player.title}",
                         { state.refreshWatching(force = true) },
                     )
                 }

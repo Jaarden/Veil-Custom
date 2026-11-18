@@ -35,7 +35,7 @@ fun VeilApp(state: LauncherState) {
         when (state.screen) {
             Screen.HOME -> Unit
             Screen.DRAWER -> { Sfx.back(); state.screen = Screen.HOME }
-            Screen.CONNECT -> { Sfx.back(); state.cancelConnect() }
+            Screen.CONNECT -> { Sfx.back(); state.connectBack() }
         }
     }
     // Once Ambient fully covers the screen, stop drawing the page underneath it.

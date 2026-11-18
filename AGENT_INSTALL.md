@@ -47,7 +47,7 @@ adb shell cat /proc/meminfo | head -1           # RAM
 adb shell wm size                               # screen resolution (UI is designed for 1920x1080)
 adb shell dumpsys SurfaceFlinger | grep -i "GLES"   # GPU + OpenGL ES version (visualizer needs ES 3.0)
 adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME
-adb shell pm list packages | grep -i -E "nuvio|spotify"
+adb shell pm list packages | grep -i -E "nuvio|stremio|spotify"
 ```
 Stop and tell the person if the TV runs older than Android 9. If OpenGL ES is below 3.0, Veil still
 works; the visualizer is simply unavailable, and music mode uses the album-art screen.
@@ -102,12 +102,15 @@ Walk them through getting each key:
 
 - **TMDB_KEY** (required, for artwork): themoviedb.org account → Settings → API → request a key
   (Developer, personal use). Use the **v3 "API Key"**, not the long read-access token.
-- **Trakt** (for *Continue watching*): **nothing to set up.** Leave `TRAKT_CLIENT_ID`,
-  `TRAKT_CLIENT_SECRET` and `TRAKT_REDIRECT_URI` empty and the build uses Veil's shared Trakt app
-  (`source/trakt.properties`; public on purpose, it has no secret). They sign in later **on the TV**
-  ("Connect Trakt" on Home shows a code for trakt.tv/activate); their account never goes into the source.
-  Continue watching opens items in **Nuvio**, which syncs to Trakt; Nuvio must be signed in to the same
-  Trakt account.
+- **Trakt, Simkl or MDBList** (for *Continue watching*): **nothing to set up.** Leave the `TRAKT_*`,
+  `SIMKL_CLIENT_ID` and `MDBLIST_CLIENT_ID` lines empty and the build uses Veil's shared apps
+  (`source/trakt.properties`, `simkl.properties`, `mdblist.properties`; public on purpose, TV sign-in apps
+  have no secret). Ask which tracker they use. They sign in later **on the TV**: "Connect a tracker" on Home
+  lets them pick Trakt, Simkl or MDBList and shows a QR code and a short code for their phone. Their account
+  never goes into the source. One tracker is connected at a time.
+  Continue watching opens items in **Nuvio** or **Stremio** (picked once in the Veil menu, *Play shows
+  with*). The player must sync its progress to the same tracker account (Nuvio syncs to Trakt; check the
+  player's settings for Simkl or MDBList).
   - Only if they want **their own Trakt app**: trakt.tv → Settings → Your API Apps → New application, any
     name, redirect URI `urn:ietf:wg:oauth:2.0:oob`. They can enter its Client ID on the TV (Connect Trakt →
     *Use your own Trakt app*). Veil saves it on the TV and also writes it to
@@ -133,7 +136,7 @@ cd source
 Install only after `BUILD SUCCESSFUL`. On Windows, R8 sometimes locks `classes.dex`; just run the build
 again. The app is at `source/app/build/outputs/apk/release/app-release.apk`. It's signed with this
 computer's debug key, so later updates must be built on the same computer. A build from a different
-computer needs an uninstall first, which also signs them out of Trakt.
+computer needs an uninstall first, which also signs them out of their tracker.
 
 Ask, then run:
 ```sh
@@ -173,13 +176,15 @@ launcher to "fix" the flash (rule 1).
 
 Guide them through, and confirm each works:
 1. **Home** shows Veil. Press Home inside another app: it comes back to Veil.
-2. **Connect Trakt**: shows a code, they enter it at trakt.tv/activate, and Continue watching fills in.
+2. **Connect a tracker**: they pick Trakt, Simkl or MDBList, scan the QR code (or enter the code on the
+   service's site), and Continue watching fills in. Then in the Veil menu, *Play shows with*: Nuvio or
+   Stremio, and press a show to check it opens the right episode.
 3. **Artwork and logos** load. If they're missing, the TMDB key is wrong.
 4. **Apps row**: Veil starts with TizenTube, Nuvio and Spotify pinned. Any of them that isn't installed is
    simply left out (the row always ends with *All apps*). Help them pin their own apps: *All apps* → hold
    OK on an app → *Pin to Home*. Pinned apps can be moved left/right the same way.
-5. **Veil menu** (the "veil" wordmark top left): theme, weather city, music mode (album art + lyrics, or
-   visualizer), visualizer settings.
+5. **Veil menu** (OK on the "veil" button top left): which app plays shows, theme, weather city, music
+   mode (album art + lyrics, or visualizer), visualizer settings.
 6. **Privacy pill**: turning it on enables encrypted DNS. Browse a bit to check sites still load. Pause/off work.
 7. **Music**: play something in Spotify or similar, then open Ambient (Veil menu → *Start Veil Ambient*, or wait
    for the screensaver). Album art and lyrics, or the visualizer, should react.

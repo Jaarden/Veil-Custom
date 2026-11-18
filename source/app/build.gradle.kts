@@ -19,6 +19,15 @@ val ownTrakt = keys.getProperty("TRAKT_CLIENT_ID", "").isNotBlank()
 if (!ownTrakt) listOf("TRAKT_CLIENT_ID", "TRAKT_REDIRECT_URI").forEach { k ->
     sharedTrakt.getProperty(k)?.let { keys.setProperty(k, it) }
 }
+// Veil's shared Simkl and MDBList apps (public device-code apps: a client ID only, no secret), used
+// unless keys.properties has its own.
+listOf("simkl.properties" to "SIMKL_CLIENT_ID", "mdblist.properties" to "MDBLIST_CLIENT_ID").forEach { (file, k) ->
+    if (keys.getProperty(k, "").isBlank()) {
+        val f = rootProject.file(file)
+        if (f.exists()) Properties().apply { f.reader(Charsets.UTF_8).use { load(it) } }
+            .getProperty(k)?.let { keys.setProperty(k, it) }
+    }
+}
 // Escape non-ASCII as \uXXXX so the generated Java source is encoding-proof.
 fun key(name: String) = "\"" + keys.getProperty(name, "").trim()
     .map { c -> if (c.code > 127) "\\u%04x".format(c.code) else c.toString() }.joinToString("") + "\""
@@ -36,6 +45,8 @@ android {
         buildConfigField("String", "TRAKT_CLIENT_ID", key("TRAKT_CLIENT_ID"))
         buildConfigField("String", "TRAKT_CLIENT_SECRET", key("TRAKT_CLIENT_SECRET"))
         buildConfigField("String", "TRAKT_REDIRECT_URI", key("TRAKT_REDIRECT_URI"))
+        buildConfigField("String", "SIMKL_CLIENT_ID", key("SIMKL_CLIENT_ID"))
+        buildConfigField("String", "MDBLIST_CLIENT_ID", key("MDBLIST_CLIENT_ID"))
         buildConfigField("String", "TMDB_KEY", key("TMDB_KEY"))
         buildConfigField("String", "NEXTDNS_PROFILE", key("NEXTDNS_PROFILE"))
         buildConfigField("String", "NEXTDNS_API_KEY", key("NEXTDNS_API_KEY"))
