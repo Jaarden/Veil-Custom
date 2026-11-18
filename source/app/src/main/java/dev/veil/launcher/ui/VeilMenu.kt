@@ -10,6 +10,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,26 +74,32 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
- * The "veil" wordmark is a button. While it — or anything in its menu — has focus, the Veil menu drops
- * down under it: start Veil Ambient, pick a theme, change the weather location. Press Down to enter it.
+ * The "veil" wordmark is a button. OK drops the Veil menu down under it (start Veil Ambient, pick a theme,
+ * change the weather location) and moves focus to its first item; OK again closes it. It also closes when
+ * focus leaves the button and the menu.
  */
 @Composable
 fun VeilMenuAnchor(state: LauncherState) {
-    var focused by remember { mutableStateOf(false) }
-    // Open only after focus has rested here briefly: when Veil comes to the front, focus passes over the
-    // wordmark for a few ms before landing on Continue Watching, which would otherwise flash the menu.
-    LaunchedEffect(focused) {
-        if (focused) { delay(200); if (!state.veilMenuOpen) Sfx.open(); state.veilMenuOpen = true } else state.veilMenuOpen = false
-    }
-    Box(Modifier.onFocusChanged { focused = it.hasFocus; state.wordmarkFocused = it.hasFocus }) {
+    val firstItem = remember { FocusRequester() }
+    // focusGroup: the button and its menu share one focus parent, so moving focus between them never
+    // reads as "focus left" for a moment (which closed the menu right after OK opened it).
+    Box(Modifier.onFocusChanged {
+        state.wordmarkFocused = it.hasFocus
+        if (!it.hasFocus) state.veilMenuOpen = false
+    }.focusGroup()) {
         // Styled like the other top-bar pills (soft fill + outline + chevron) so it reads as a button.
         Surface(
-            onClick = { /* the menu opens on focus; OK does nothing extra */ },
-            // Back closes the menu from the "veil" button too (not only from inside the menu), by sending
-            // focus back to the page, exactly like the panel's own Back handling.
+            onClick = {
+                if (state.veilMenuOpen) { Sfx.back(); state.veilMenuOpen = false }
+                else { Sfx.open(); state.veilMenuOpen = true; state.veilMenuFocusTick++ }
+            },
+            // Back from the "veil" button closes the menu if it's open, otherwise returns to the page.
             modifier = Modifier.focusSound(1.12f).onPreviewKeyEvent { e ->
-                if (e.key == Key.Back && e.type == KeyEventType.KeyUp) { Sfx.back(); state.focusHome(); true }
-                else e.key == Key.Back
+                if (e.key == Key.Back && e.type == KeyEventType.KeyUp) {
+                    Sfx.back()
+                    if (state.veilMenuOpen) state.veilMenuOpen = false else state.focusHome()
+                    true
+                } else e.key == Key.Back
             },
             shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
             colors = ClickableSurfaceDefaults.colors(
@@ -122,7 +130,7 @@ fun VeilMenuAnchor(state: LauncherState) {
         Box(Modifier.floatingBelow(40.dp)) {
             // Kept built while on Home (it was rebuilt from scratch on every open, which stuttered); while
             // closed it isn't placed on screen, so the remote can never move focus into it.
-            KeptPanel(open = state.veilMenuOpen) { VeilPanel(state) }
+            KeptPanel(open = state.veilMenuOpen) { VeilPanel(state, firstItem) }
         }
     }
 }
@@ -156,8 +164,15 @@ private fun KeptPanel(open: Boolean, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun VeilPanel(state: LauncherState) {
+private fun VeilPanel(state: LauncherState, firstItem: FocusRequester) {
     var focusedTheme by remember { mutableStateOf<VeilThemeSpec?>(null) }
+    // Opened with OK: move focus to the first item once the panel is placed (it's placed the frame it opens).
+    LaunchedEffect(state.veilMenuFocusTick) {
+        if (state.veilMenuFocusTick > 0 && state.veilMenuOpen) {
+            withFrameNanos { }
+            runCatching { firstItem.requestFocus() }
+        }
+    }
     val current = ThemeState.current
     val vizButton = remember { FocusRequester() }
     val weatherButton = remember { FocusRequester() }
@@ -193,7 +208,10 @@ private fun VeilPanel(state: LauncherState) {
         }
 
         // Ambient
-        MenuButton(icon = VeilIcons.Sparkle, title = "Start Veil Ambient", subtitle = "Screensaver & music mode", onClick = state::startAmbient)
+        MenuButton(
+            icon = VeilIcons.Sparkle, title = "Start Veil Ambient", subtitle = "Screensaver & music mode",
+            modifier = Modifier.focusRequester(firstItem), onClick = state::startAmbient,
+        )
 
         // Music mode: what Veil Ambient shows while music plays
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

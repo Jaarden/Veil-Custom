@@ -358,6 +358,8 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
     // ---- Veil menu (drops down from the wordmark) -------------------------------------------------
 
     var veilMenuOpen by mutableStateOf(false)
+    /** Bumped when OK opens the Veil menu, so focus moves into it. */
+    var veilMenuFocusTick by mutableStateOf(0)
     var vizSettingsOpen by mutableStateOf(false)
     /** Which Veil-menu button should get focus back after its window closes ("viz", "weather"). */
     var menuReturn by mutableStateOf<String?>(null)
