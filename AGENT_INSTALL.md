@@ -117,9 +117,16 @@ Walk them through getting each key:
     `/sdcard/Android/data/dev.veil.launcher/files/trakt.properties`. When you rebuild, copy it into
     `keys.properties` so it's built in too: `adb shell cat /sdcard/Android/data/dev.veil.launcher/files/trakt.properties`.
     Leave `TRAKT_CLIENT_SECRET` empty: new Trakt apps are PKCE-only.
-- **NEXTDNS_PROFILE / NEXTDNS_API_KEY** (optional): my.nextdns.io. The profile ID is in the setup page
-  (e.g. `abc123`), the API key at the bottom of the account page. Without them, the privacy switch uses
-  AdGuard DNS and doesn't show a blocked counter.
+- **NextDNS** (optional): **ask the person whether they want to use NextDNS** for the ad-blocking switch.
+  Explain the choice first: with NextDNS (free account at nextdns.io, their own block lists) Veil also shows
+  how many trackers were blocked today and this week. Without it, the switch uses AdGuard DNS (no account,
+  no counter). Both block system-wide only when they turn the switch on.
+  - If **yes**: fill in `NEXTDNS_PROFILE` (the ID on the my.nextdns.io setup page, e.g. `abc123`) and
+    `NEXTDNS_API_KEY` (bottom of the account page). Then tell them to set **Settings → Logs → Retention**
+    in NextDNS to **1 week or longer**. With a shorter retention NextDNS deletes the older days, so "this
+    week" always equals "today". The change only keeps data from then on, so the weekly count fills in over
+    the following days.
+  - If **no**: leave both empty.
 - **WEATHER_CITY** (optional): a city name. It can also be set later on the TV in the Veil menu.
 
 Changing keys means rebuilding (they're compiled into the app). Never commit or share `keys.properties`;
