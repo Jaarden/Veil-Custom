@@ -24,7 +24,7 @@ More in [`screenshots/`](screenshots).
 > - A **Request** screen for your own **Seerr** (Overseerr / Jellyseerr) server, opened from the button next
 >   to the *veil* button: search or browse trending; filter by **Movies / TV shows**, **Popular / Latest**,
 >   **streaming service** (for example *the latest movies on Netflix*) and **In my library**; 36 titles at a
->   time with a **More** button; IMDb and Rotten Tomatoes scores on the posters; a details window with
+>   time, and more load by themselves as you scroll; IMDb and Rotten Tomatoes scores on the posters; a details window with
 >   description, genres, release date, cast and more; and on its right side the actions: request a movie,
 >   a whole show, **specific seasons** or all missing seasons, or **Play on Plex** for what you already own.
 > - **Double press of Home** opens the TV's recent-apps screen, where running apps can be switched to or

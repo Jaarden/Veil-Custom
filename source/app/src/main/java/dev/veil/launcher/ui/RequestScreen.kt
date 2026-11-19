@@ -182,8 +182,21 @@ fun RequestScreen(state: LauncherState) {
             }
         }
         Spacer(Modifier.height(8.dp))
+        val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+        // Close to the end of the list (the last two rows are on screen): load the next titles by itself.
+        val nearEnd by androidx.compose.runtime.remember {
+            androidx.compose.runtime.derivedStateOf {
+                val info = grid.layoutInfo
+                val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+                last >= info.totalItemsCount - 13
+            }
+        }
+        LaunchedEffect(nearEnd, state.requestItems.size, state.requestLoading, state.requestHasMore) {
+            if (nearEnd && state.requestItems.isNotEmpty() && state.requestHasMore && !state.requestLoading) state.moreRequests()
+        }
         LazyVerticalGrid(
             columns = GridCells.Fixed(6),
+            state = grid,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 40.dp),
@@ -192,29 +205,13 @@ fun RequestScreen(state: LauncherState) {
             items(state.requestItems, key = { it.key }) { m ->
                 // Scores are fetched for the posters actually on screen, not the whole list.
                 LaunchedEffect(m.key) { state.loadRatings(m) }
-                // After "Show more" the focus moves to the first new poster, so you carry on from there.
-                val focus = remember { FocusRequester() }
-                LaunchedEffect(state.requestFocusKey) {
-                    if (state.requestFocusKey == m.key) {
-                        delay(60)
-                        runCatching { focus.requestFocus() }
-                        state.requestFocusKey = null
-                    }
-                }
-                PosterTile(m, state.requestRatings[m.key], Modifier.focusRequester(focus), onClick = { state.requestSheet = m })
+                PosterTile(m, state.requestRatings[m.key], onClick = { state.requestSheet = m })
             }
+            // Under the last row while the next titles load.
             if (state.requestItems.isNotEmpty() && state.requestHasMore) {
-                item(key = "more", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
-                    Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
-                        Pill(
-                            onClick = state::moreRequests,
-                            padding = PaddingValues(horizontal = 26.dp, vertical = 9.dp),
-                        ) {
-                            Text(
-                                if (state.requestLoading) "Loading\u2026" else "More",
-                                fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                            )
-                        }
+                item(key = "loading", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                    Box(Modifier.fillMaxWidth().height(28.dp), contentAlignment = Alignment.Center) {
+                        if (state.requestLoading) Text("Loading more\u2026", fontSize = 10.sp, color = Veil.Text.copy(alpha = 0.55f))
                     }
                 }
             }

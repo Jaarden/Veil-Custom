@@ -425,8 +425,6 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
     val requestItems: List<dev.veil.launcher.data.Seerr.Media> get() = requestPool.take(requestVisible)
     /** There may be more titles to show. */
     val requestHasMore: Boolean get() = requestPool.size > requestVisible || !requestExhausted
-    /** After "Show more": the first new poster, which takes the focus once it is on screen. */
-    var requestFocusKey by mutableStateOf<String?>(null)
     var requestQuery by mutableStateOf("")
         private set
     var requestLoading by mutableStateOf(false)
@@ -525,7 +523,6 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
         requestVisible = REQUEST_CHUNK
         requestPages = 0
         requestExhausted = false
-        requestFocusKey = null
         requestJob = scope.launch {
             requestLoading = true
             requestError = null
@@ -543,17 +540,19 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
         }
     }
 
-    /** "Show more": the next [REQUEST_CHUNK] titles, fetched from Seerr first when they aren't here yet. */
+    /**
+     * The next [REQUEST_CHUNK] titles, fetched from Seerr first when they aren't here yet. The screen calls
+     * this by itself when you scroll close to the end of the list.
+     */
     fun moreRequests() {
         if (requestLoading || !requestHasMore) return
         val before = requestVisible
         requestVisible = before + REQUEST_CHUNK
-        if (requestPool.size >= requestVisible) { requestFocusKey = requestPool.getOrNull(before)?.key; return }
+        if (requestPool.size >= requestVisible) return
         requestJob = scope.launch {
             requestLoading = true
             try {
                 fillRequests(requestVisible)
-                requestFocusKey = requestPool.getOrNull(before)?.key
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -590,7 +589,7 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
                 }
             }
             requestPages += batch
-            if (raw.isEmpty()) requestExhausted = true
+            if (raw.isEmpty() || requestPages >= MAX_REQUEST_PAGES) requestExhausted = true
             requestPool = (requestPool + raw.filter { !onlyLibrary || it.inLibrary }).distinctBy { it.key }
         }
     }
@@ -1126,6 +1125,8 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
     companion object {
         /** Titles the Request screen shows at first, and each time "Show more" is pressed. */
         const val REQUEST_CHUNK = 36
+        /** Seerr pages looked at for one search or filter set, at most (about 1,000 titles); then the list ends. */
+        private const val MAX_REQUEST_PAGES = 60
         /** Default seconds the Plex app gets to connect to the server before it's asked to play. */
         private const val DEFAULT_PLEX_WAIT = 5
         const val NUVIO = "com.nuvio.tv"
