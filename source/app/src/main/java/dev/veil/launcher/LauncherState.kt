@@ -989,7 +989,7 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
     )
 
-    // ---- Which app plays Continue Watching (chosen once in the Veil menu) ----
+    // ---- Which app plays Continue Watching items from Trakt, Simkl or MDBList ----
 
     /** Apps that can open the exact episode/movie from an IMDb id. */
     enum class Player(val id: String, val title: String, val pkg: String) {
@@ -997,23 +997,16 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
         STREMIO("stremio", "Stremio", STREMIO_PKG),
     }
 
-    var player by mutableStateOf(Player.entries.firstOrNull { it.id == prefs.getString("player", null) } ?: Player.NUVIO)
-        private set
-
     fun isInstalled(p: Player): Boolean =
         runCatching { context.packageManager.getPackageInfo(p.pkg, 0); true }.getOrDefault(false)
 
-    fun choosePlayer(p: Player) {
-        if (!isInstalled(p)) { dev.veil.launcher.ui.Sfx.error(); showToast("${p.title} isn't installed on this TV"); return }
-        player = p
-        prefs.edit().putString("player", p.id).apply()
-    }
+    /** Nuvio when it's installed, else Stremio (no setting for it). */
+    private fun effectivePlayer(): Player = Player.entries.firstOrNull { isInstalled(it) } ?: Player.NUVIO
 
-    /** The chosen player, or another supported one if it was uninstalled. */
-    private fun effectivePlayer(): Player =
-        if (isInstalled(player)) player else Player.entries.firstOrNull { isInstalled(it) } ?: player
+    /** Name of the app Continue Watching items open in, for the empty-row hint. */
+    val playerName: String get() = effectivePlayer().title
 
-    /** Opens the item in the chosen player, straight to its streams. */
+    /** Opens the item in Plex, or in Nuvio / Stremio (whichever is installed), straight to its streams. */
     fun open(item: WatchItem) {
         if (service == Service.PLEX) { openInPlex(item); return }
         if (effectivePlayer() == Player.STREMIO) openInStremio(item) else openInNuvio(item)

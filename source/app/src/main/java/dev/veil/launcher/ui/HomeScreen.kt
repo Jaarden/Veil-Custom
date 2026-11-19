@@ -323,7 +323,7 @@ private fun ContinueRow(state: LauncherState, focusKey: (String) -> FocusRequest
                         when {
                             state.loading -> "Fetching from ${state.service.title}"
                             state.showingAdded -> "New movies and shows on your server appear here"
-                            else -> "Start something in ${if (state.service == dev.veil.launcher.data.Service.PLEX) "Plex" else state.player.title}"
+                            else -> "Start something in ${if (state.service == dev.veil.launcher.data.Service.PLEX) "Plex" else state.playerName}"
                         },
                         { state.refreshWatching(force = true) },
                     )

@@ -239,19 +239,6 @@ private fun VeilPanel(state: LauncherState, firstItem: FocusRequester) {
             modifier = Modifier.focusRequester(firstItem), onClick = state::startAmbient,
         )
 
-        // Which app OK on a Continue Watching card opens (chosen once, remembered)
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SectionLabel("PLAY SHOWS WITH")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                LauncherState.Player.entries.forEach { p ->
-                    ModeChip(
-                        if (state.isInstalled(p)) p.title else "${p.title} (not installed)",
-                        VeilIcons.Play, state.player == p, Modifier.weight(1f),
-                    ) { state.choosePlayer(p) }
-                }
-            }
-        }
-
         // Plex: how long the Plex app gets to start up before Veil asks it to play
         if (state.service == dev.veil.launcher.data.Service.PLEX) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -110,8 +110,8 @@ Walk them through getting each key:
   have no secret). Ask which tracker they use. They sign in later **on the TV**: "Connect a tracker" on Home
   lets them pick Trakt, Simkl or MDBList and shows a QR code and a short code for their phone. Their account
   never goes into the source. One tracker is connected at a time.
-  Continue watching opens items in **Nuvio** or **Stremio** (picked once in the Veil menu, *Play shows
-  with*). The player must sync its progress to the same tracker account (Nuvio syncs to Trakt; check the
+  Continue watching opens items in **Nuvio** if it is installed, otherwise **Stremio** (there is no menu
+  setting for this). The player must sync its progress to the same tracker account (Nuvio syncs to Trakt; check the
   player's settings for Simkl or MDBList).
   - Only if they want **their own Trakt app**: trakt.tv → Settings → Your API Apps → New application, any
     name, redirect URI `urn:ietf:wg:oauth:2.0:oob`. They can enter its Client ID on the TV (Connect Trakt →
@@ -208,8 +208,8 @@ second to tell the two apart. If a TV misbehaves, the helper is `HomeButtonServi
 Guide them through, and confirm each works:
 1. **Home** shows Veil. Press Home inside another app: it comes back to Veil.
 2. **Connect a tracker**: they pick Trakt, Simkl or MDBList, scan the QR code (or enter the code on the
-   service's site), and Continue watching fills in. Then in the Veil menu, *Play shows with*: Nuvio or
-   Stremio, and press a show to check it opens the right episode.
+   service's site), and Continue watching fills in. Then press a show to check it opens the right
+   episode in Nuvio (or Stremio, when Nuvio isn't installed).
 3. **Artwork and logos** load. If they're missing, the TMDB key is wrong.
 4. **Apps row**: Veil starts with TizenTube, Nuvio and Spotify pinned. Any of them that isn't installed is
    simply left out (the row always ends with *All apps*). Help them pin their own apps: *All apps* → hold

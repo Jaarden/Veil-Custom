@@ -87,8 +87,8 @@ enter its Client ID with the remote, or set `TRAKT_CLIENT_ID` in `keys.propertie
 **Plex** needs no key: pick it on the Connect screen and type the 4-character code at plex.tv/link. The Plex
 app has to be installed on the TV to play anything.
 
-Which app opens your shows is chosen once in the Veil menu (**Play shows with**: Nuvio or Stremio). Both
-open the exact episode, ready to pick a stream.
+Continue watching from Trakt, Simkl or MDBList opens in **Nuvio** when it's installed, otherwise in
+**Stremio** (there is no setting for it). Both open the exact episode, ready to pick a stream.
 
 ## Permissions, and why
 
