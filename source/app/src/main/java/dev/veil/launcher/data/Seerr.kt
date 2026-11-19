@@ -22,6 +22,8 @@ class Seerr(private val context: android.content.Context, baseUrl: String, priva
         val popularity: Double = 0.0,
         /** TMDB's own user score (0-10), shown when there is no IMDb score; 0 when nobody voted. */
         val tmdbScore: Double = 0.0,
+        /** The short description, as Seerr's lists carry it. */
+        val overview: String? = null,
         /** Seerr's media status: 2-3 requested, 4 partly available, 5 available; anything else: not there. */
         val status: Int,
     ) {
@@ -64,6 +66,83 @@ class Seerr(private val context: android.content.Context, baseUrl: String, priva
 
     /** What's trending now, for the screen before you search. */
     fun trending(page: Int = 1): List<Media> = parse(get("/discover/trending?page=$page"))
+
+    /** What the details window shows beyond what the lists carry. Anything Seerr doesn't know is null or empty. */
+    data class Details(
+        val tagline: String?,
+        val overview: String?,
+        val genres: List<String>,
+        /** Minutes: a movie's length, or a typical episode's. */
+        val runtime: Int?,
+        val date: String?,
+        val status: String?,
+        val cast: List<String>,
+        /** "Director" / "Created by", and who. */
+        val creditLabel: String,
+        val credit: List<String>,
+        /** Age rating for your country, else the US one. */
+        val certification: String?,
+        val seasons: Int?,
+        val episodes: Int?,
+        /** "Studio" / "Network", and which. */
+        val makerLabel: String,
+        val makers: List<String>,
+        val language: String?,
+    )
+
+    private fun JSONObject.names(array: String, key: String = "name", max: Int = 6): List<String> {
+        val a = optJSONArray(array) ?: return emptyList()
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it)?.str(key) }.take(max)
+    }
+
+    /** Description, genres, length, release date, cast and more for one title (movie or show). */
+    fun details(m: Media, region: String): Details {
+        val j = JSONObject(get(if (m.isMovie) "/movie/${m.id}" else "/tv/${m.id}"))
+        // Age rating: your country's, else the US one.
+        val certification = if (m.isMovie) {
+            val results = j.obj("releases")?.optJSONArray("results")
+            fun rating(country: String): String? {
+                for (i in 0 until (results?.length() ?: 0)) {
+                    val r = results?.optJSONObject(i) ?: continue
+                    if (r.str("iso_3166_1") != country) continue
+                    val dates = r.optJSONArray("release_dates") ?: continue
+                    for (k in 0 until dates.length()) dates.optJSONObject(k)?.str("certification")?.let { return it }
+                }
+                return null
+            }
+            rating(region) ?: rating("US")
+        } else {
+            val results = j.obj("contentRatings")?.optJSONArray("results")
+            fun rating(country: String): String? {
+                for (i in 0 until (results?.length() ?: 0)) {
+                    val r = results?.optJSONObject(i) ?: continue
+                    if (r.str("iso_3166_1") == country) r.str("rating")?.let { return it }
+                }
+                return null
+            }
+            rating(region) ?: rating("US")
+        }
+        val crew = j.obj("credits")?.optJSONArray("crew")
+        val directors = (0 until (crew?.length() ?: 0)).mapNotNull { crew?.optJSONObject(it) }
+            .filter { it.str("job") == "Director" }.mapNotNull { it.str("name") }.take(2)
+        return Details(
+            tagline = j.str("tagline"),
+            overview = j.str("overview"),
+            genres = j.names("genres"),
+            runtime = if (m.isMovie) j.int("runtime")?.takeIf { it > 0 } else j.optJSONArray("episodeRunTime")?.optInt(0, 0)?.takeIf { it > 0 },
+            date = if (m.isMovie) j.str("releaseDate") else j.str("firstAirDate"),
+            status = j.str("status"),
+            cast = j.obj("credits")?.names("cast", max = 6) ?: emptyList(),
+            creditLabel = if (m.isMovie) "Director" else "Created by",
+            credit = if (m.isMovie) directors else j.names("createdBy", max = 3),
+            certification = certification,
+            seasons = if (m.isMovie) null else j.int("numberOfSeasons")?.takeIf { it > 0 },
+            episodes = if (m.isMovie) null else j.int("numberOfEpisodes")?.takeIf { it > 0 },
+            makerLabel = if (m.isMovie) "Studio" else "Network",
+            makers = if (m.isMovie) j.names("productionCompanies", max = 2) else j.names("networks", max = 3),
+            language = j.str("originalLanguage")?.let { java.util.Locale(it).getDisplayLanguage(java.util.Locale.ENGLISH) }?.takeIf { it.isNotBlank() },
+        )
+    }
 
     /** IMDb score (0-10) and Rotten Tomatoes critics score (0-100 %), each null when unknown. */
     data class Ratings(val imdb: Double?, val rt: Int?)
@@ -146,18 +225,54 @@ class Seerr(private val context: android.content.Context, baseUrl: String, priva
                 date = if (isMovie) r.str("releaseDate") else r.str("firstAirDate"),
                 popularity = r.optDouble("popularity", 0.0),
                 tmdbScore = if (r.optInt("voteCount", 0) > 0) r.optDouble("voteAverage", 0.0) else 0.0,
+                overview = r.str("overview"),
                 status = r.obj("mediaInfo")?.int("status") ?: 0,
             )
         }
     }
 
+    /** One season of a show, with whether it's already in your library or already requested. */
+    data class Season(val number: Int, val episodes: Int, val airDate: String?, val status: Int) {
+        val taken: Boolean get() = status == AVAILABLE
+        val requested: Boolean get() = status == PENDING || status == PROCESSING
+        /** Nothing stops you requesting it. */
+        val open: Boolean get() = !taken && !requested
+    }
+
+    /** The seasons of a show (without "Specials"), with what Seerr knows about each. */
+    fun seasons(m: Media): List<Season> {
+        val j = JSONObject(get("/tv/${m.id}"))
+        val media = j.obj("mediaInfo")
+        val status = HashMap<Int, Int>()
+        media?.optJSONArray("seasons")?.let { a ->
+            for (i in 0 until a.length()) a.optJSONObject(i)?.let { o -> o.int("seasonNumber")?.let { status[it] = o.int("status") ?: 1 } }
+        }
+        // Seasons in a request that is waiting or approved (the library status can lag behind a new request).
+        media?.optJSONArray("requests")?.let { reqs ->
+            for (i in 0 until reqs.length()) {
+                val r = reqs.optJSONObject(i) ?: continue
+                if (r.int("status") == 3) continue // declined
+                val rs = r.optJSONArray("seasons") ?: continue
+                for (k in 0 until rs.length()) {
+                    val n = rs.optJSONObject(k)?.int("seasonNumber") ?: continue
+                    if ((status[n] ?: 1) <= 1) status[n] = PENDING
+                }
+            }
+        }
+        val all = j.optJSONArray("seasons") ?: return emptyList()
+        return (0 until all.length()).mapNotNull { all.optJSONObject(it) }.mapNotNull { o ->
+            val n = o.int("seasonNumber")?.takeIf { it > 0 } ?: return@mapNotNull null
+            Season(n, o.int("episodeCount") ?: 0, o.str("airDate"), status[n] ?: 1)
+        }.sortedBy { it.number }
+    }
+
     /**
-     * Requests the movie, or every season of the show that isn't in your library yet. Returns null when
-     * it worked, else a short reason to show.
+     * Requests the movie, or a show: the given [seasons], or all of them when null. Returns null when it
+     * worked, else a short reason to show.
      */
-    fun request(m: Media): String? {
+    fun request(m: Media, seasons: List<Int>? = null): String? {
         val body = JSONObject().put("mediaType", if (m.isMovie) "movie" else "tv").put("mediaId", m.id)
-        if (!m.isMovie) body.put("seasons", "all")
+        if (!m.isMovie) body.put("seasons", if (seasons == null) "all" else org.json.JSONArray(seasons))
         val (code, text) = call("POST", "/request", body.toString())
         return when {
             code in 200..299 -> null

@@ -7,14 +7,37 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 
 /**
- * Makes the remote's Home button open Veil. It only looks at the Home key and at which
- * app's window comes to the front; it never reads screen content. All other keys pass through.
+ * Makes the remote's Home button open Veil (and a double press open the TV's recent apps). It only looks
+ * at the Home key and at which app's window comes to the front; it never reads screen content. All other
+ * keys pass through.
  */
 class HomeButtonService : AccessibilityService() {
 
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    /** A first Home press, waiting a moment to see whether a second one follows. */
+    private var pendingHome: Runnable? = null
+
+    /**
+     * One press: Veil. Two quick presses: the TV's own "recent apps" screen, where running apps can be
+     * switched to or closed (Dismiss). The TV does this itself on a double press, but it never sees the
+     * Home key while this helper handles it, so the helper passes the double press on. A single press
+     * waits the usual double-press time (about a third of a second) before it opens Veil, like the TV's
+     * own Home button does.
+     */
     override fun onKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode != KeyEvent.KEYCODE_HOME) return false
-        if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) goHome()
+        if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
+            val waiting = pendingHome
+            if (waiting != null) {
+                handler.removeCallbacks(waiting)
+                pendingHome = null
+                if (!performGlobalAction(GLOBAL_ACTION_RECENTS)) goHome() // no such screen on this TV
+            } else {
+                val single = Runnable { pendingHome = null; goHome() }
+                pendingHome = single
+                handler.postDelayed(single, android.view.ViewConfiguration.getDoubleTapTimeout().toLong())
+            }
+        }
         return true
     }
 

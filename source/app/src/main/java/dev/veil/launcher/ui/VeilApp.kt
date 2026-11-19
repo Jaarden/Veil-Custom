@@ -63,6 +63,7 @@ fun VeilApp(state: LauncherState) {
     if (state.musicSheet) MusicMenu(state)
     state.watchSheet?.let { WatchMenu(state, it) }
     state.requestSheet?.let { RequestMenu(state, it) }
+    state.seasonPicker?.let { SeasonPicker(state, it) }
 
     // Short confirmation ("Marked … as watched"), bottom centre
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {

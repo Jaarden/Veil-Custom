@@ -15,14 +15,25 @@ no tracking.
 
 More in [`screenshots/`](screenshots).
 
-> **This is a modified version** of [Veil](https://github.com/trbrnt/Veil) (GPL-3.0). Changes made here:
-> - **Plex** as a source: Continue Watching and a switchable **Recently added** row straight from your own
->   Plex server, with artwork; items start in the Plex app (with an adjustable start-up wait in the Veil menu).
-> - **Request** screen for a **Seerr** (Overseerr / Jellyseerr) server: search or browse (movies / TV shows,
->   popular / latest, per streaming service, already in your library), IMDb and Rotten Tomatoes scores,
->   request with one press, and *Play on Plex* for what you already have. Set `SEERR_URL` and
->   `SEERR_API_KEY` in `source/keys.properties`.
-> - Home-network server names keep working while ad blocking's DNS is on.
+> **This is a modified version** of [Veil](https://github.com/trbrnt/Veil) (GPL-3.0), with these additions:
+> - **Plex** as a source (Connect a tracker → Plex, then enter the code at plex.tv/link): **Continue watching**
+>   and a switchable **Recently added** row straight from your own Plex server(s). Artwork comes from TMDB,
+>   with the server's own artwork as the fallback. OK starts the title in the Plex app, after a start-up
+>   wait you can tune in the Veil menu (*Plex → Wait before playing*); the hold menu marks it watched or
+>   removes it from Continue Watching on the server.
+> - A **Request** screen for your own **Seerr** (Overseerr / Jellyseerr) server, opened from the button next
+>   to the *veil* button: search or browse trending; filter by **Movies / TV shows**, **Popular / Latest**,
+>   **streaming service** (for example *the latest movies on Netflix*) and **In my library**; 36 titles at a
+>   time with a **More** button; IMDb and Rotten Tomatoes scores on the posters; a details window with
+>   description, genres, release date, cast and more; and on its right side the actions: request a movie,
+>   a whole show, **specific seasons** or all missing seasons, or **Play on Plex** for what you already own.
+> - **Double press of Home** opens the TV's recent-apps screen, where running apps can be switched to or
+>   closed (experimental; a single press now waits about a third of a second to tell the two apart).
+> - Home-network server names (like your Seerr's) keep working while ad blocking's DNS is on: the name is
+>   asked from your router and the connection is still verified against the real host name.
+>
+> Settings for the additions: `SEERR_URL` and `SEERR_API_KEY` in `source/keys.properties` (see below).
+> Plex needs no key.
 
 > **Installing:** Veil is built from source with *your own* API keys. The easiest way is to give this repo
 > to an AI coding agent (for example Claude Code) and ask it to follow
@@ -33,8 +44,13 @@ More in [`screenshots/`](screenshots).
 
 - **Home**: full-screen artwork of the show or film you're on, with its title logo and a slow pan and zoom.
   The accent colour follows the artwork. Rows for **Continue watching** (from your **Trakt**, **Simkl** or
-  **MDBList** account, your pick; opens the episode in **Nuvio** or **Stremio**, ready to stream) and your
-  **apps** (pin and reorder them). Clock and weather at the top.
+  **MDBList** account, your pick; opens the episode in **Nuvio** or **Stremio**, ready to stream) or from your
+  own **Plex** server (with a switch to **Recently added**), and your **apps** (pin and reorder them). Clock
+  and weather at the top, and a **Request** button next to the *veil* button.
+- **Request** (needs your own Seerr server): search or browse, filter by movies / shows, popular / latest,
+  streaming service and what's already in your library, see IMDb and Rotten Tomatoes scores and a full
+  details window, then request a movie, a show or just the seasons you want, or play it on Plex if you
+  already have it.
 - **Privacy pill**: one switch for system-wide ad and tracker blocking via encrypted DNS (NextDNS if you
   have it, otherwise AdGuard DNS), with "pause for 15 minutes / 1 hour" for sites that break. With NextDNS
   it also shows how many trackers it blocked.
@@ -57,6 +73,7 @@ More in [`screenshots/`](screenshots).
 | TMDB API key | Artwork and title logos (**required**) | themoviedb.org → Settings → API |
 | Trakt / Simkl / MDBList client ID | Not needed: Veil's shared apps are built in. Optional, to use your own | trakt.tv/oauth/applications, simkl.com/settings/developer, mdblist.com/developer |
 | NextDNS profile + API key | NextDNS blocking and the blocked counter (optional) | my.nextdns.io |
+| Seerr address + API key | The Request screen (optional; hidden when empty) | your Seerr: Settings → General |
 
 Keys go in `source/keys.properties` (copy `keys.properties.example`), which git ignores. Continue
 Watching works out of the box through Veil's shared tracker apps (`source/trakt.properties`,
@@ -67,6 +84,9 @@ time. To use your own Trakt app instead, pick **Use your own Trakt app** on the 
 enter its Client ID with the remote, or set `TRAKT_CLIENT_ID` in `keys.properties` (likewise
 `SIMKL_CLIENT_ID` / `MDBLIST_CLIENT_ID`).
 
+**Plex** needs no key: pick it on the Connect screen and type the 4-character code at plex.tv/link. The Plex
+app has to be installed on the TV to play anything.
+
 Which app opens your shows is chosen once in the Veil menu (**Play shows with**: Nuvio or Stremio). Both
 open the exact episode, ready to pick a stream.
 
@@ -76,7 +96,7 @@ A TV can't ask for these with a pop-up, so they're granted over ADB (the install
 
 | Permission | What it's used for | What it does **not** do |
 |---|---|---|
-| Home screen + Home-button helper (accessibility service) | Makes the remote's Home button open Veil | Sees only the Home key and which app is in front. It can't read the screen or other keys |
+| Home screen + Home-button helper (accessibility service) | Makes the remote's Home button open Veil (two quick presses open the TV's recent apps) | Sees only the Home key and which app is in front. It can't read the screen or other keys |
 | Notification access | Reads "now playing" (song, artist, cover) from media apps | Ignores the contents of your notifications |
 | Audio (RECORD_AUDIO) | The visualizer reads the TV's **output** loudness live | No microphone. Nothing is recorded, stored or sent |
 | Secure settings (WRITE_SECURE_SETTINGS) | Turns the Private DNS blocking on and off; keeps the Home helper enabled | Nothing else |
@@ -85,7 +105,7 @@ A TV can't ask for these with a pop-up, so they're granted over ADB (the install
 ## Privacy
 
 - **No accounts, analytics, ads or Veil servers.** Veil talks directly to these services over HTTPS:
-  - **TMDB**: titles of what you're watching, to get artwork.
+  - **TMDB**: titles of what you're watching, to get artwork (and the posters on the Request screen).
   - **Trakt, Simkl or MDBList** (only the one you connect): reads your watch progress with your own login
     and, only when you ask, marks items watched or removes them from Continue Watching (clears paused
     progress; for shows, Trakt hides it from progress, Simkl moves it to "On hold", MDBList marks it
@@ -94,11 +114,19 @@ A TV can't ask for these with a pop-up, so they're granted over ADB (the install
   - **Open-Meteo**: your chosen city, for the weather.
   - **LRCLIB**: the song currently playing (title, artist, album, length), to get lyrics.
   - **NextDNS API**: your blocked-tracker stats, if set up.
+  - **Plex** (only if you pick it): plex.tv to sign in and list your servers, then your own Plex Media
+    Server(s) for Continue watching, Recently added, artwork, and the mark-watched / remove actions. Veil
+    only talks to servers over HTTPS.
+  - **Seerr** (only if you set `SEERR_URL`): your own Seerr server, for searching, browsing, details, scores
+    and requests. Seerr itself looks up the IMDb and Rotten Tomatoes scores. If its address only exists on
+    your home network and ad blocking's outside DNS can't find it, Veil asks your router's DNS for that one
+    name and connects there, still checking the certificate against the real host name.
   - **GitHub**: once a day, asks for the date of Veil's latest code change, to show "update available"
     in the Veil menu. Nothing about you is sent. Switch it off in the Veil menu, or with
     `UPDATE_CHECK=false` in `keys.properties`.
 - **Your tracker login** stays on the TV, in Veil's private storage (excluded from Android backups).
-  Switching to another tracker signs Veil out of the old one.
+  Switching to another tracker signs Veil out of the old one. Your Plex sign-in is kept the same way, and
+  the Seerr API key is compiled into the app from `keys.properties` (which git ignores).
 - **DNS blocking is off until you turn it on.** It uses Android's built-in Private DNS, so it covers every
   app on the TV, and it can be paused or switched off at any time.
 
@@ -108,6 +136,9 @@ When a newer Veil is out, a small dot appears on the "veil" button and the Veil 
 available**. Ask your AI agent to update Veil: it follows the *Updating Veil* section of
 [`AGENT_INSTALL.md`](AGENT_INSTALL.md) (pull, rebuild on the same computer, install over the old one). Your
 permissions, sign-in and settings stay as they are.
+
+In this modified version the *Update available* dot still compares against the original Veil repository
+(`trbrnt/Veil`), not this one.
 
 ## Undo
 
@@ -135,7 +166,7 @@ See [`AGENT_INSTALL.md`](AGENT_INSTALL.md) for installing, permissions and perfo
 - Lyrics from [LRCLIB](https://lrclib.net), weather from [Open-Meteo](https://open-meteo.com) (CC BY 4.0).
 - [Manrope](https://github.com/sharanda/manrope) font, under the SIL Open Font License 1.1
   ([`licenses/OFL-Manrope.txt`](licenses/OFL-Manrope.txt)).
-- NextDNS, Trakt, Simkl, MDBList, TMDB, Spotify, Nuvio and Stremio are trademarks of their owners. Veil isn't affiliated with any of them.
+- NextDNS, Trakt, Simkl, MDBList, TMDB, Plex, Seerr, Spotify, Nuvio and Stremio are trademarks of their owners. Veil isn't affiliated with any of them. The Plex and Seerr icons are shown only to identify the services.
 
 ## License
 

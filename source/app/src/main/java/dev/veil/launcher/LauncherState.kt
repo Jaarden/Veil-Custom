@@ -39,6 +39,9 @@ import kotlinx.coroutines.withContext
 
 enum class Screen { HOME, DRAWER, CONNECT, REQUEST }
 
+/** The "which seasons?" window of the Request screen: the show and its seasons. */
+data class SeasonPick(val media: dev.veil.launcher.data.Seerr.Media, val seasons: List<dev.veil.launcher.data.Seerr.Season>)
+
 /** The hold-OK menu: which app it is for, and whether it was opened from the Home row. */
 data class AppSheet(val app: AppEntry, val fromHome: Boolean)
 
@@ -408,9 +411,22 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
 
     // ---- Request screen (Seerr): search for a movie or show and request it for your library ----
     val seerr = dev.veil.launcher.data.Seerr(context, BuildConfig.SEERR_URL, BuildConfig.SEERR_API_KEY)
-    /** Search results, or what's trending while the search box is empty. */
-    var requestItems by mutableStateOf<List<dev.veil.launcher.data.Seerr.Media>>(emptyList())
+    /**
+     * Everything fetched so far for the current search or filters, in order. The screen shows the first
+     * [requestVisible] of it, [REQUEST_CHUNK] more each time "Show more" is pressed.
+     */
+    private var requestPool by mutableStateOf<List<dev.veil.launcher.data.Seerr.Media>>(emptyList())
+    var requestVisible by mutableStateOf(REQUEST_CHUNK)
         private set
+    /** Seerr pages fetched so far for the current filters, and whether Seerr has no more. */
+    private var requestPages = 0
+    private var requestExhausted = false
+    /** Search results, or what's trending while the search box is empty. */
+    val requestItems: List<dev.veil.launcher.data.Seerr.Media> get() = requestPool.take(requestVisible)
+    /** There may be more titles to show. */
+    val requestHasMore: Boolean get() = requestPool.size > requestVisible || !requestExhausted
+    /** After "Show more": the first new poster, which takes the focus once it is on screen. */
+    var requestFocusKey by mutableStateOf<String?>(null)
     var requestQuery by mutableStateOf("")
         private set
     var requestLoading by mutableStateOf(false)
@@ -433,6 +449,18 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
         scope.launch {
             val r = ratingsGate.withPermit { withContext(Dispatchers.IO) { runCatching { seerr.ratings(m) }.getOrNull() } }
             if (r != null) requestRatings[m.key] = r else ratingsAsked.remove(m.key)
+        }
+    }
+
+    /** Description, genres, cast and more per title (by Media.key), loaded when its window opens. */
+    val requestDetails = androidx.compose.runtime.mutableStateMapOf<String, dev.veil.launcher.data.Seerr.Details>()
+    private val detailsAsked = HashSet<String>()
+
+    fun loadRequestDetails(m: dev.veil.launcher.data.Seerr.Media) {
+        if (!detailsAsked.add(m.key)) return
+        scope.launch {
+            val d = withContext(Dispatchers.IO) { runCatching { seerr.details(m, region) }.getOrNull() }
+            if (d != null) requestDetails[m.key] = d else detailsAsked.remove(m.key) // a failed lookup is tried again next time
         }
     }
 
@@ -490,47 +518,24 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
             return if (requestInLibrary) "$what \u00B7 in your library" else what
         }
 
+    /** Starts the list over for the current search and filters. */
     private fun loadRequests() {
         requestJob?.cancel()
+        requestPool = emptyList()
+        requestVisible = REQUEST_CHUNK
+        requestPages = 0
+        requestExhausted = false
+        requestFocusKey = null
         requestJob = scope.launch {
             requestLoading = true
             requestError = null
             try {
-                val q = requestQuery; val type = requestType; val latest = requestLatest; val provider = requestProvider?.id; val country = region
-                val onlyLibrary = requestInLibrary
-                // "In your library" keeps only a few of each page, so it looks through several pages at once.
-                val pages = if (onlyLibrary) 1..5 else 1..1
-                requestItems = withContext(Dispatchers.IO) {
-                    kotlinx.coroutines.coroutineScope {
-                        pages.map { page ->
-                            async {
-                                val list = when {
-                                    q.isNotEmpty() -> seerr.search(q, page).filter {
-                                        type == RequestType.ALL || (type == RequestType.MOVIES) == it.isMovie
-                                    }
-                                    type == RequestType.ALL && !latest && provider == null -> seerr.trending(page)
-                                    else -> {
-                                        val movies = if (type != RequestType.SHOWS) seerr.discover(true, latest, provider, country, page) else emptyList()
-                                        val shows = if (type != RequestType.MOVIES) seerr.discover(false, latest, provider, country, page) else emptyList()
-                                        val all = movies + shows
-                                        if (movies.isEmpty() || shows.isEmpty()) all
-                                        else if (latest) all.sortedByDescending { it.date.orEmpty() } else all.sortedByDescending { it.popularity }
-                                    }
-                                }
-                                // The first page must load; later pages are a bonus.
-                                list
-                            }
-                        }.mapIndexed { i, d -> if (i == 0) d.await() else runCatching { d.await() }.getOrDefault(emptyList()) }
-                            .flatten()
-                            .filter { !onlyLibrary || it.inLibrary }
-                            .distinctBy { it.key }
-                    }
-                }
+                fillRequests(REQUEST_CHUNK)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 android.util.Log.w("VeilSeerr", "search failed", e)
-                requestItems = emptyList()
+                requestPool = emptyList()
                 requestError = "Couldn't reach Seerr"
             } finally {
                 requestLoading = false
@@ -538,13 +543,111 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
         }
     }
 
-    fun request(m: dev.veil.launcher.data.Seerr.Media) {
+    /** "Show more": the next [REQUEST_CHUNK] titles, fetched from Seerr first when they aren't here yet. */
+    fun moreRequests() {
+        if (requestLoading || !requestHasMore) return
+        val before = requestVisible
+        requestVisible = before + REQUEST_CHUNK
+        if (requestPool.size >= requestVisible) { requestFocusKey = requestPool.getOrNull(before)?.key; return }
+        requestJob = scope.launch {
+            requestLoading = true
+            try {
+                fillRequests(requestVisible)
+                requestFocusKey = requestPool.getOrNull(before)?.key
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("VeilSeerr", "more failed", e)
+                requestVisible = before
+                dev.veil.launcher.ui.Sfx.error()
+                showToast("Couldn't load more from Seerr")
+            } finally {
+                requestLoading = false
+            }
+        }
+    }
+
+    /**
+     * Fetches Seerr pages until the pool holds [target] titles, or Seerr has no more. "In your library"
+     * keeps only a few titles of each page, so it looks at more pages at a time; one call looks at no more
+     * than a handful of batches, and "Show more" carries on from there.
+     */
+    private suspend fun fillRequests(target: Int) {
+        val limit = requestPages + 15
+        while (requestPool.size < target && !requestExhausted && requestPages < limit) {
+            val q = requestQuery; val type = requestType; val latest = requestLatest
+            val provider = requestProvider?.id; val country = region; val onlyLibrary = requestInLibrary
+            val first = requestPages + 1
+            val batch = if (onlyLibrary) 3 else 2
+            val raw = withContext(Dispatchers.IO) {
+                kotlinx.coroutines.coroutineScope {
+                    (first until first + batch).map { page ->
+                        async { fetchRequestPage(page, q, type, latest, provider, country) }
+                    }.mapIndexed { i, d ->
+                        // The first page of a batch must load; the others are a bonus.
+                        if (i == 0) d.await() else runCatching { d.await() }.getOrDefault(emptyList())
+                    }.flatten()
+                }
+            }
+            requestPages += batch
+            if (raw.isEmpty()) requestExhausted = true
+            requestPool = (requestPool + raw.filter { !onlyLibrary || it.inLibrary }).distinctBy { it.key }
+        }
+    }
+
+    /** One Seerr page for the current search or filters. */
+    private fun fetchRequestPage(
+        page: Int, q: String, type: RequestType, latest: Boolean, provider: Int?, country: String,
+    ): List<dev.veil.launcher.data.Seerr.Media> = when {
+        q.isNotEmpty() -> seerr.search(q, page).filter { type == RequestType.ALL || (type == RequestType.MOVIES) == it.isMovie }
+        type == RequestType.ALL && !latest && provider == null -> seerr.trending(page)
+        else -> {
+            val movies = if (type != RequestType.SHOWS) seerr.discover(true, latest, provider, country, page) else emptyList()
+            val shows = if (type != RequestType.MOVIES) seerr.discover(false, latest, provider, country, page) else emptyList()
+            val all = movies + shows
+            if (movies.isEmpty() || shows.isEmpty()) all
+            else if (latest) all.sortedByDescending { it.date.orEmpty() } else all.sortedByDescending { it.popularity }
+        }
+    }
+
+    /** The "which seasons?" window, once the show's seasons are loaded. */
+    var seasonPicker by mutableStateOf<SeasonPick?>(null)
+
+    fun chooseSeasons(m: dev.veil.launcher.data.Seerr.Media) {
         scope.launch {
-            val problem = withContext(Dispatchers.IO) { runCatching { seerr.request(m) }.getOrElse { "Couldn't reach Seerr" } }
+            val list = withContext(Dispatchers.IO) { runCatching { seerr.seasons(m) }.getOrNull() }
+            when {
+                list == null -> { dev.veil.launcher.ui.Sfx.error(); showToast("Couldn't load the seasons from Seerr") }
+                list.none { it.open } -> showToast("Every season of ${m.title} is already available or requested")
+                else -> seasonPicker = SeasonPick(m, list)
+            }
+        }
+    }
+
+    /** Requests every season that is neither in your library nor requested yet. */
+    fun requestMissing(m: dev.veil.launcher.data.Seerr.Media) {
+        scope.launch {
+            val list = withContext(Dispatchers.IO) { runCatching { seerr.seasons(m) }.getOrNull() }
+            val missing = list?.filter { it.open }?.map { it.number }
+            when {
+                list == null -> { dev.veil.launcher.ui.Sfx.error(); showToast("Couldn't load the seasons from Seerr") }
+                missing.isNullOrEmpty() -> showToast("Every season of ${m.title} is already available or requested")
+                else -> request(m, missing)
+            }
+        }
+    }
+
+    /** [seasons]: only these seasons of a show (null: all of them; movies ignore it). */
+    fun request(m: dev.veil.launcher.data.Seerr.Media, seasons: List<Int>? = null) {
+        scope.launch {
+            val problem = withContext(Dispatchers.IO) { runCatching { seerr.request(m, seasons) }.getOrElse { "Couldn't reach Seerr" } }
             if (problem == null) {
                 dev.veil.launcher.ui.Sfx.success()
-                showToast("Requested ${m.title}")
-                requestItems = requestItems.map { if (it.key == m.key) it.copy(status = dev.veil.launcher.data.Seerr.PENDING) else it }
+                showToast(if (seasons == null || m.isMovie) "Requested ${m.title}" else "Requested ${m.title} · " + seasons.joinToString(", ") { "S$it" })
+                // A title that wasn't there at all is now requested; one that is partly there keeps its badge.
+                requestPool = requestPool.map {
+                    if (it.key == m.key && it.status <= 1) it.copy(status = dev.veil.launcher.data.Seerr.PENDING) else it
+                }
             } else {
                 dev.veil.launcher.ui.Sfx.error()
                 showToast("${m.title}: $problem")
@@ -736,7 +839,7 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
     /** Music playing: ambient after 30 s idle on Home. Otherwise after 5 min. */
     fun checkIdle() {
         if (ambient || screen != Screen.HOME || sheet != null || privacySheet || musicSheet || weatherPicker ||
-            vizSettingsOpen || updateDialog || watchSheet != null || requestSheet != null
+            vizSettingsOpen || updateDialog || watchSheet != null || requestSheet != null || seasonPicker != null
         ) return
         val idle = System.currentTimeMillis() - lastInput
         val playing = nowPlaying.track?.playing == true
@@ -1028,6 +1131,8 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
     }
 
     companion object {
+        /** Titles the Request screen shows at first, and each time "Show more" is pressed. */
+        const val REQUEST_CHUNK = 36
         /** Default seconds the Plex app gets to connect to the server before it's asked to play. */
         private const val DEFAULT_PLEX_WAIT = 5
         const val NUVIO = "com.nuvio.tv"
