@@ -246,6 +246,15 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
         refreshWatching(force = true)
     }
 
+    /**
+     * Plex is your own server, so its rows (Continue watching, Recently added) are refreshed about once a
+     * minute while Home is on screen: a movie added to Plex shows up by itself. Other trackers are online
+     * services that ask not to be polled, so they refresh when you come back to Home.
+     */
+    fun refreshOwnLibrary() {
+        if (service == Service.PLEX && screen == Screen.HOME) refreshWatching()
+    }
+
     fun refreshWatching(force: Boolean = false) {
         connected = tracker.isConnected
         if (!connected) return
@@ -462,6 +471,84 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
         }
     }
 
+    // ---- Voice search (Request screen): the TV's own speech recognizer, started by the Voice button ----
+    var voiceListening by mutableStateOf(false)
+        private set
+    /** What has been understood so far, while you are still speaking. */
+    var voiceHeard by mutableStateOf("")
+        private set
+    /** 0..1, how loud you are, for the microphone circle. */
+    var voiceLevel by mutableStateOf(0f)
+        private set
+    /** Why voice search stopped without a result, shown in its window. */
+    var voiceProblem by mutableStateOf<String?>(null)
+        private set
+    val voiceActive: Boolean get() = voiceListening || voiceProblem != null
+    private var recognizer: android.speech.SpeechRecognizer? = null
+
+    fun startVoiceSearch() {
+        stopVoice()
+        if (!android.speech.SpeechRecognizer.isRecognitionAvailable(context)) {
+            dev.veil.launcher.ui.Sfx.error(); showToast("This TV has no speech recognition that apps can use"); return
+        }
+        if (context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            voiceProblem = MIC_PERMISSION_MESSAGE; return
+        }
+        voiceHeard = ""; voiceProblem = null; voiceLevel = 0f; voiceListening = true
+        val r = android.speech.SpeechRecognizer.createSpeechRecognizer(context)
+        recognizer = r
+        fun first(b: android.os.Bundle?) = b?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+        r.setRecognitionListener(object : android.speech.RecognitionListener {
+            override fun onReadyForSpeech(params: android.os.Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) { voiceLevel = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f) }
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() { voiceLevel = 0f }
+            override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
+            override fun onPartialResults(partialResults: android.os.Bundle?) { first(partialResults)?.let { voiceHeard = it } }
+            override fun onResults(results: android.os.Bundle?) {
+                val text = first(results)?.trim()
+                releaseRecognizer()
+                if (text.isNullOrEmpty()) { voiceProblem = "Didn't catch that. Try again." }
+                else { dev.veil.launcher.ui.Sfx.success(); voiceProblem = null; searchRequests(text) }
+            }
+            override fun onError(error: Int) {
+                releaseRecognizer()
+                android.util.Log.w("VeilVoice", "speech error $error")
+                voiceProblem = when (error) {
+                    android.speech.SpeechRecognizer.ERROR_NO_MATCH, android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Didn't catch that. Try again."
+                    android.speech.SpeechRecognizer.ERROR_NETWORK, android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
+                    android.speech.SpeechRecognizer.ERROR_SERVER -> "Voice search needs an internet connection."
+                    android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> MIC_PERMISSION_MESSAGE
+                    android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "The speech service is busy. Try again in a moment."
+                    android.speech.SpeechRecognizer.ERROR_AUDIO -> "The microphone didn't deliver sound. Try again."
+                    else -> "Voice search didn't work (error $error)."
+                }
+            }
+        })
+        r.startListening(
+            Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
+                .putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                .putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                .putExtra(android.speech.RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName),
+        )
+    }
+
+    private fun releaseRecognizer() {
+        recognizer?.let { runCatching { it.cancel(); it.destroy() } }
+        recognizer = null
+        voiceListening = false
+        voiceLevel = 0f
+    }
+
+    /** Closes voice search (and stops listening). */
+    fun stopVoice() {
+        releaseRecognizer()
+        voiceProblem = null
+        voiceHeard = ""
+    }
+
     /** Filters on the Request screen. */
     enum class RequestType(val title: String) { ALL("All"), MOVIES("Movies"), SHOWS("TV shows") }
 
@@ -499,6 +586,34 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
         if (p == requestProvider) return
         requestProvider = p
         if (p != null) requestQuery = ""
+        loadRequests()
+    }
+
+    /** Focus is on the posters (you are browsing the list), not on the search box or the filters. */
+    var requestGridFocused by mutableStateOf(false)
+    /** The filter chip you used last ("type:MOVIES", "order:latest", "library", "provider:8"), where Back returns to. */
+    var requestLastFilter by mutableStateOf<String?>(null)
+        private set
+    fun noteRequestFilter(key: String) { requestLastFilter = key }
+
+    /** Raised to ask the Request screen to move focus up to the filters. */
+    var requestFilterTick by mutableStateOf(0)
+        private set
+    fun focusRequestFilters() { requestFilterTick++ }
+
+    /** A search or a filter is on, so the screen is not the plain overview (trending). */
+    val requestFiltered: Boolean
+        get() = requestQuery.isNotEmpty() || requestType != RequestType.ALL || requestLatest ||
+            requestProvider != null || requestInLibrary
+
+    /** Back to the plain overview: no search, no filters. */
+    fun resetRequests() {
+        requestLastFilter = null
+        requestQuery = ""
+        requestType = RequestType.ALL
+        requestLatest = false
+        requestProvider = null
+        requestInLibrary = false
         loadRequests()
     }
 
@@ -838,7 +953,7 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
     /** Music playing: ambient after 30 s idle on Home. Otherwise after 5 min. */
     fun checkIdle() {
         if (ambient || screen != Screen.HOME || sheet != null || privacySheet || musicSheet || weatherPicker ||
-            vizSettingsOpen || updateDialog || watchSheet != null || requestSheet != null || seasonPicker != null
+            vizSettingsOpen || updateDialog || watchSheet != null || requestSheet != null || seasonPicker != null || voiceActive
         ) return
         val idle = System.currentTimeMillis() - lastInput
         val playing = nowPlaying.track?.playing == true
@@ -1123,6 +1238,7 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
     }
 
     companion object {
+        private const val MIC_PERMISSION_MESSAGE = "Veil needs microphone access for voice search (RECORD_AUDIO, granted over adb: see the install guide)."
         /** Titles the Request screen shows at first, and each time "Show more" is pressed. */
         const val REQUEST_CHUNK = 36
         /** Seerr pages looked at for one search or filter set, at most (about 1,000 titles); then the list ends. */

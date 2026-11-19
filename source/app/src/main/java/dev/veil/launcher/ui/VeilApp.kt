@@ -36,7 +36,16 @@ fun VeilApp(state: LauncherState) {
             Screen.HOME -> Unit
             Screen.DRAWER -> { Sfx.back(); state.screen = Screen.HOME }
             Screen.CONNECT -> { Sfx.back(); state.connectBack() }
-            Screen.REQUEST -> { Sfx.back(); state.screen = Screen.HOME }
+            // Browsing the posters: Back goes up to the filters and leaves them as they are. On the filters:
+            // Back clears the search and filters. On the plain overview: Back goes Home.
+            Screen.REQUEST -> {
+                Sfx.back()
+                when {
+                    state.requestGridFocused -> state.focusRequestFilters()
+                    state.requestFiltered -> state.resetRequests()
+                    else -> state.screen = Screen.HOME
+                }
+            }
         }
     }
     // Once Ambient fully covers the screen, stop drawing the page underneath it.
@@ -64,6 +73,7 @@ fun VeilApp(state: LauncherState) {
     state.watchSheet?.let { WatchMenu(state, it) }
     state.requestSheet?.let { RequestMenu(state, it) }
     state.seasonPicker?.let { SeasonPicker(state, it) }
+    if (state.voiceActive) VoiceDialog(state)
 
     // Short confirmation ("Marked … as watched"), bottom centre
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {

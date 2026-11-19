@@ -133,21 +133,21 @@ Walk them through getting each key:
   to put in `keys.properties`.** Ask whether they use Plex. If so, they pick **Plex** on the TV under
   *Connect a tracker* and type the 4-character code at plex.tv/link. The **Plex app has to be installed**
   on the TV to play anything. Veil opens Plex first and starts the title after a few seconds; the wait is
-  the *Plex → Wait before playing* slider in the Veil menu (default 5 s).
+  the *Plex → Wait before playing* slider in the Settings menu (default 5 s).
 - **SEERR_URL and SEERR_API_KEY** (optional, for the **Request** screen): **ask the person whether they run
   a Seerr (Overseerr / Jellyseerr) server.** Explain it first: Veil gets a **Request** button next to the
-  *veil* button, where they can search, browse by streaming service, see scores and details, and request
+  Settings button, where they can search, browse by streaming service, see scores and details, and request
   a movie, a show or specific seasons. Without it the button is hidden. They give `SEERR_URL` (the https
   address of their server, no path) and `SEERR_API_KEY` (Seerr > Settings > General). Never print the key
   back in full. Seerr approves requests made with an admin API key on its own, so a request may start a
   download at once. Never send a test request without asking first. If the address only exists on their
   home network, that is fine: Veil asks the router's DNS for it, also while ad blocking is on.
-- **WEATHER_CITY** (optional): a city name. It can also be set later on the TV in the Veil menu.
+- **WEATHER_CITY** (optional): a city name. It can also be set later on the TV in the Settings menu.
 - **UPDATE_CHECK**: **ask the person** whether Veil may check for updates. If yes (the default), once a
   day Veil asks GitHub's public API for the date of its latest code change and, if it's newer than their
-  build, shows a small dot on the "veil" button and an "Update available" row in the Veil menu (never a
+  build, shows a small dot on the "Settings" button and an "Update available" row in the Settings menu (never a
   popup). Nothing about them is sent; GitHub only sees an IP address. If no, set `UPDATE_CHECK=false`. It
-  can be switched later in the Veil menu.
+  can be switched later in the Settings menu.
 
 Changing keys means rebuilding (they're compiled into the app). Never commit or share `keys.properties`;
 it's already listed in `source/.gitignore`.
@@ -191,6 +191,11 @@ Veil Ambient as the screensaver (the TV's own timeout setting is untouched):
 ```sh
 adb shell settings put secure screensaver_components dev.veil.launcher/dev.veil.launcher.VeilDream
 ```
+`RECORD_AUDIO` is used by the visualizer (the TV's **output** loudness) and by **voice search** on the
+Request screen (the microphone, the remote's, only after the person presses *Voice*; the TV's speech
+recognizer, on a Shield Google's, turns it into text and normally sends the audio to its servers). Tell the
+person both before you grant it.
+
 Fresh installs need all the grants above. Updates (`install -r`) keep them.
 
 **About the Home button:** on Google TV, Home goes to Google's launcher first, and Veil swaps it out (a brief
@@ -214,20 +219,21 @@ Guide them through, and confirm each works:
 4. **Apps row**: Veil starts with TizenTube, Nuvio and Spotify pinned. Any of them that isn't installed is
    simply left out (the row always ends with *All apps*). Help them pin their own apps: *All apps* → hold
    OK on an app → *Pin to Home*. Pinned apps can be moved left/right the same way.
-5. **Veil menu** (OK on the "veil" button top left): which app plays shows, theme, weather city, music
+5. **Settings menu** (OK on the "Settings" button top left): theme, weather city, music
    mode (album art + lyrics, or visualizer), visualizer settings.
 6. **Privacy pill**: turning it on enables encrypted DNS. Browse a bit to check sites still load. Pause/off work.
-7. **Music**: play something in Spotify or similar, then open Ambient (Veil menu → *Start Veil Ambient*, or wait
+7. **Music**: play something in Spotify or similar, then open Ambient (Settings menu → *Start Veil Ambient*, or wait
    for the screensaver). Album art and lyrics, or the visualizer, should react.
 8. **Plex** (only if they use it): *Connect a tracker* → Plex, enter the code at plex.tv/link, and Continue
    watching fills in. The pill next to the row title switches to **Recently added** and back. OK on a card
    should start the title in the Plex app after the wait; if Plex says "Server niet bereikbaar / Failed to
-   fetch play queue response", raise *Wait before playing* in the Veil menu and try again (Plex then needs
+   fetch play queue response", raise *Wait before playing* in the Settings menu and try again (Plex then needs
    to be closed and reopened, because it stays stuck after that error).
 9. **Request** (only with a Seerr server): the **Request** button next to *veil* opens the screen. Check
    trending loads, the Movies / TV shows, Popular / Latest, streaming-service and *In my library* filters,
    that more titles load by themselves when scrolling to the bottom (36 at a time), a title's details window (description, genres, cast, scores) with the
-   actions on its right, and **Choose seasons…** on a show. Don't press a request button while testing
+   actions on its right, and **Choose seasons…** on a show, and **Voice** next to the search box (press it, say a title, and the
+   search should run when they stop speaking). Don't press a request button while testing
    unless the person agrees: it creates a real request.
 10. **Home double press** (optional): two quick presses of the remote's Home button should show the TV's
     recent apps.
@@ -246,7 +252,7 @@ don't guess.** Ask permission first if you'll press remote buttons yourself.
 
 ```sh
 adb shell dumpsys gfxinfo dev.veil.launcher reset
-# ...person uses Home for ~20 s: move between cards, open the Veil menu and the privacy panel...
+# ...person uses Home for ~20 s: move between cards, open the Settings menu and the privacy panel...
 adb shell dumpsys gfxinfo dev.veil.launcher | grep -E "Total frames|Janky frames|90th|95th"
 ```
 - Home idle is expected to draw only ~30 fps (the slow backdrop drift) with almost no jank.
@@ -271,7 +277,7 @@ Before lite mode, or instead of it, the person can lower **Trails** and **Glow**
 
 ## 7. Updating Veil
 
-When the person asks to update Veil (the Veil menu says "Update available"), on **the same computer** that
+When the person asks to update Veil (the Settings menu says "Update available"), on **the same computer** that
 built it (the signing key lives there):
 
 1. **Get the new code:** `git pull` in this repo. If they changed files themselves, show them what
@@ -287,7 +293,7 @@ built it (the signing key lives there):
    An update keeps everything: permissions, home screen, screensaver, tracker sign-in and settings. No grants
    need redoing. Never uninstall to "fix" an update; if it fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`,
    see Troubleshooting and ask before uninstalling (that resets everything).
-6. **Check:** Home still opens Veil, and the dot on the "veil" button is gone.
+6. **Check:** Home still opens Veil, and the dot on the "Settings" button is gone.
 
 The *Update available* dot in this version follows https://github.com/Jaarden/Veil-Custom (`REPO` in
 `UpdateCheck.kt`), so `git pull` should come from that repository.
@@ -326,9 +332,13 @@ Rules that keep Veil smooth on weak TV GPUs:
 - **The TV's ADB port changes after a reboot** (wireless debugging): reconnect with `adb mdns services` /
   `adb connect`.
 - **Plex shows "Server niet bereikbaar" / "Failed to fetch play queue response"**: Plex was asked to play
-  before it had connected to the server. Raise *Wait before playing* in the Veil menu, close Plex
+  before it had connected to the server. Raise *Wait before playing* in the Settings menu, close Plex
   (Home double press → *Dismiss*, or restart it) and try again.
 - **Request says "Couldn't reach Seerr"**: check `SEERR_URL` (https, no path) and `SEERR_API_KEY`, that the
   TV can reach the server (`adb shell ping <host>`), and that its certificate is valid. Rebuild after
   changing keys. Look for `VeilSeerr` in `adb logcat`.
+- **Voice search says it needs microphone access / does nothing**: re-grant `RECORD_AUDIO`
+  (`adb shell pm grant dev.veil.launcher android.permission.RECORD_AUDIO`). It also needs the TV's
+  speech recognizer (`adb shell cmd package query-services --brief -a android.speech.RecognitionService`)
+  and an internet connection. Look for `VeilVoice` in `adb logcat`.
 - **No Request button**: `SEERR_URL` or `SEERR_API_KEY` was empty when the app was built.

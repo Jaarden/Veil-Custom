@@ -129,6 +129,7 @@ object VeilIcons {
     val Check = icon("check", "M5 12.5l4.5 4.5L19 7.5")
     val ChevronDown = icon("chevron-down", "M6 9l6 6 6-6")
     val Search = icon("search", "M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M20 20l-4-4")
+    val Mic = icon("mic", "M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z M6 11a6 6 0 0 0 12 0 M12 17v4 M9 21h6")
 
     val Timer = icon("timer", "M12 4a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M12 9v4l2.5 2 M9 2h6")
     val Sparkle = icon("sparkle", "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 17l.7 1.8 1.8.7-1.8.7L19 22l-.7-1.8-1.8-.7 1.8-.7z")

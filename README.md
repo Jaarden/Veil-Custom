@@ -19,10 +19,11 @@ More in [`screenshots/`](screenshots).
 > - **Plex** as a source (Connect a tracker → Plex, then enter the code at plex.tv/link): **Continue watching**
 >   and a switchable **Recently added** row straight from your own Plex server(s). Artwork comes from TMDB,
 >   with the server's own artwork as the fallback. OK starts the title in the Plex app, after a start-up
->   wait you can tune in the Veil menu (*Plex → Wait before playing*); the hold menu marks it watched or
->   removes it from Continue Watching on the server.
+>   wait you can tune in the Settings menu (*Plex → Wait before playing*); the hold menu marks it watched or
+>   removes it from Continue Watching on the server. The Plex rows refresh by themselves about
+>   once a minute while Home is on screen, so a movie you add to Plex turns up without a restart.
 > - A **Request** screen for your own **Seerr** (Overseerr / Jellyseerr) server, opened from the button next
->   to the *veil* button: search or browse trending; filter by **Movies / TV shows**, **Popular / Latest**,
+>   to the Settings button: search (typed, or by **voice** with the Voice button) or browse trending; filter by **Movies / TV shows**, **Popular / Latest**,
 >   **streaming service** (for example *the latest movies on Netflix*) and **In my library**; 36 titles at a
 >   time, and more load by themselves as you scroll; IMDb and Rotten Tomatoes scores on the posters; a details window with
 >   description, genres, release date, cast and more; and on its right side the actions: request a movie,
@@ -46,8 +47,8 @@ More in [`screenshots/`](screenshots).
   The accent colour follows the artwork. Rows for **Continue watching** (from your **Trakt**, **Simkl** or
   **MDBList** account, your pick; opens the episode in **Nuvio** or **Stremio**, ready to stream) or from your
   own **Plex** server (with a switch to **Recently added**), and your **apps** (pin and reorder them). Clock
-  and weather at the top, and a **Request** button next to the *veil* button.
-- **Request** (needs your own Seerr server): search or browse, filter by movies / shows, popular / latest,
+  and weather at the top, and a **Request** button next to the Settings button.
+- **Request** (needs your own Seerr server): search (by keyboard or by voice) or browse, filter by movies / shows, popular / latest,
   streaming service and what's already in your library, see IMDb and Rotten Tomatoes scores and a full
   details window, then request a movie, a show or just the seasons you want, or play it on Plex if you
   already have it.
@@ -98,7 +99,7 @@ A TV can't ask for these with a pop-up, so they're granted over ADB (the install
 |---|---|---|
 | Home screen + Home-button helper (accessibility service) | Makes the remote's Home button open Veil (two quick presses open the TV's recent apps) | Sees only the Home key and which app is in front. It can't read the screen or other keys |
 | Notification access | Reads "now playing" (song, artist, cover) from media apps | Ignores the contents of your notifications |
-| Audio (RECORD_AUDIO) | The visualizer reads the TV's **output** loudness live | No microphone. Nothing is recorded, stored or sent |
+| Audio (RECORD_AUDIO) | The visualizer reads the TV's **output** loudness live. **Voice search** on the Request screen listens to the microphone (the remote's) after you press *Voice* | The visualizer records nothing. Voice search never listens in the background, and Veil only receives the text |
 | Secure settings (WRITE_SECURE_SETTINGS) | Turns the Private DNS blocking on and off; keeps the Home helper enabled | Nothing else |
 | Internet | The services below | - |
 
@@ -117,12 +118,16 @@ A TV can't ask for these with a pop-up, so they're granted over ADB (the install
   - **Plex** (only if you pick it): plex.tv to sign in and list your servers, then your own Plex Media
     Server(s) for Continue watching, Recently added, artwork, and the mark-watched / remove actions. Veil
     only talks to servers over HTTPS.
+  - **Voice search** (only when you press *Voice* on the Request screen): the TV's own speech recognizer
+    (on the Shield, Google's) listens through the remote's microphone and turns what you say into text,
+    which normally means the audio goes to Google's servers. Veil only receives the text and uses it to
+    search your Seerr. It stops listening when you finish, cancel or leave the screen.
   - **Seerr** (only if you set `SEERR_URL`): your own Seerr server, for searching, browsing, details, scores
     and requests. Seerr itself looks up the IMDb and Rotten Tomatoes scores. If its address only exists on
     your home network and ad blocking's outside DNS can't find it, Veil asks your router's DNS for that one
     name and connects there, still checking the certificate against the real host name.
   - **GitHub**: once a day, asks for the date of the latest code change in `Jaarden/Veil-Custom`, to show "update available"
-    in the Veil menu. Nothing about you is sent. Switch it off in the Veil menu, or with
+    in the Settings menu. Nothing about you is sent. Switch it off in the Settings menu, or with
     `UPDATE_CHECK=false` in `keys.properties`.
 - **Your tracker login** stays on the TV, in Veil's private storage (excluded from Android backups).
   Switching to another tracker signs Veil out of the old one. Your Plex sign-in is kept the same way, and
@@ -132,7 +137,7 @@ A TV can't ask for these with a pop-up, so they're granted over ADB (the install
 
 ## Updating
 
-When a newer Veil is out, a small dot appears on the "veil" button and the Veil menu says **Update
+When a newer Veil is out, a small dot appears on the "Settings" button and the Settings menu says **Update
 available**. Ask your AI agent to update Veil: it follows the *Updating Veil* section of
 [`AGENT_INSTALL.md`](AGENT_INSTALL.md) (pull, rebuild on the same computer, install over the old one). Your
 permissions, sign-in and settings stay as they are.

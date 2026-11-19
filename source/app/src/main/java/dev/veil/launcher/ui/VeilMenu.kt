@@ -119,7 +119,7 @@ fun VeilMenuAnchor(state: LauncherState) {
                     contentDescription = null, modifier = Modifier.size(13.dp), tint = LocalContentColor.current,
                 )
                 Spacer(Modifier.width(6.dp))
-                Text("veil", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.3).sp)
+                Text("Settings", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.3).sp)
                 Spacer(Modifier.width(5.dp))
                 Icon(
                     VeilIcons.ChevronDown, contentDescription = "Menu", modifier = Modifier.size(11.dp),
@@ -218,7 +218,7 @@ private fun VeilPanel(state: LauncherState, firstItem: FocusRequester) {
     ) {
         // Header
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("veil", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.8).sp)
+            Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.8).sp)
             Text("Private by design · no ads · no tracking", fontSize = 9.sp, color = Veil.Text.copy(alpha = 0.6f))
         }
 

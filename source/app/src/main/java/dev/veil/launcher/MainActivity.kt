@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 while (true) {
                     state.refreshExtras()
+                    state.refreshOwnLibrary()
                     delay(60_000)
                 }
             }
@@ -91,6 +92,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        state.stopVoice() // never keep listening in the background
         state.nowPlaying.stop()
         super.onStop()
     }

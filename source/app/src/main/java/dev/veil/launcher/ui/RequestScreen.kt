@@ -40,8 +40,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
@@ -101,6 +103,23 @@ fun RequestScreen(state: LauncherState) {
         state.searchRequests(text)
     }
     LaunchedEffect(Unit) { delay(80); runCatching { searchFocus.requestFocus() } }
+    // Back while browsing the posters: focus returns to the filters (the chip that is on).
+    val filterFocus = remember { FocusRequester() }
+    val providerRow = androidx.compose.foundation.lazy.rememberLazyListState()
+    // The chip you used last, else the type that is on. Chips are told apart by these keys.
+    val backTarget = state.requestLastFilter ?: "type:${state.requestType.name}"
+    LaunchedEffect(state.requestFilterTick) {
+        if (state.requestFilterTick == 0) return@LaunchedEffect
+        // A service chip that has scrolled out of the row isn't on screen to take focus: bring it back first.
+        if (backTarget.startsWith("provider:")) {
+            val id = backTarget.removePrefix("provider:").toIntOrNull()
+            val index = if (id == null) 0 else state.requestProviders.indexOfFirst { it.id == id } + 1
+            runCatching { providerRow.scrollToItem(index.coerceAtLeast(0)) }
+            delay(60)
+        }
+        runCatching { filterFocus.requestFocus() }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { state.requestGridFocused = false } }
     LaunchedEffect(typing) {
         delay(80)
         runCatching { (if (typing) fieldFocus else searchFocus).requestFocus() }
@@ -145,6 +164,16 @@ fun RequestScreen(state: LauncherState) {
                     )
                 }
             }
+            if (!typing) {
+                Spacer(Modifier.width(8.dp))
+                Pill(
+                    onClick = state::startVoiceSearch,
+                    padding = PaddingValues(start = 12.dp, end = 18.dp, top = 9.dp, bottom = 9.dp),
+                ) {
+                    Icon(VeilIcons.Mic, contentDescription = null, modifier = Modifier.size(13.dp), tint = LocalContentColor.current)
+                    Text("Voice", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
             Spacer(Modifier.width(16.dp))
             Text(
                 when {
@@ -160,24 +189,46 @@ fun RequestScreen(state: LauncherState) {
         // Filters: what kind, in which order, and (when Seerr knows your country's services) on which service.
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             LauncherState.RequestType.entries.forEach { t ->
-                FilterChip(t.title, state.requestType == t) { state.chooseRequestType(t) }
+                val key = "type:${t.name}"
+                FilterChip(
+                    t.title, state.requestType == t,
+                    modifier = if (backTarget == key) Modifier.focusRequester(filterFocus) else Modifier,
+                ) { state.noteRequestFilter(key); state.chooseRequestType(t) }
             }
             Spacer(Modifier.width(14.dp))
-            FilterChip("Popular", !state.requestLatest) { state.chooseRequestLatest(false) }
-            FilterChip("Latest", state.requestLatest) { state.chooseRequestLatest(true) }
+            FilterChip(
+                "Popular", !state.requestLatest,
+                modifier = if (backTarget == "order:popular") Modifier.focusRequester(filterFocus) else Modifier,
+            ) { state.noteRequestFilter("order:popular"); state.chooseRequestLatest(false) }
+            FilterChip(
+                "Latest", state.requestLatest,
+                modifier = if (backTarget == "order:latest") Modifier.focusRequester(filterFocus) else Modifier,
+            ) { state.noteRequestFilter("order:latest"); state.chooseRequestLatest(true) }
             Spacer(Modifier.width(14.dp))
-            FilterChip("In my library", state.requestInLibrary) { state.toggleRequestInLibrary() }
+            FilterChip(
+                "In my library", state.requestInLibrary,
+                modifier = if (backTarget == "library") Modifier.focusRequester(filterFocus) else Modifier,
+            ) { state.noteRequestFilter("library"); state.toggleRequestInLibrary() }
         }
         if (state.requestProviders.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             androidx.compose.foundation.lazy.LazyRow(
+                state = providerRow,
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
             ) {
-                item(key = "any") { FilterChip("Any service", state.requestProvider == null) { state.chooseRequestProvider(null) } }
+                item(key = "any") {
+                    FilterChip(
+                        "Any service", state.requestProvider == null,
+                        modifier = if (backTarget == "provider:any") Modifier.focusRequester(filterFocus) else Modifier,
+                    ) { state.noteRequestFilter("provider:any"); state.chooseRequestProvider(null) }
+                }
                 items(state.requestProviders.size, key = { state.requestProviders[it].id }) { i ->
                     val p = state.requestProviders[i]
-                    FilterChip(p.name, state.requestProvider?.id == p.id) { state.chooseRequestProvider(p) }
+                    FilterChip(
+                        p.name, state.requestProvider?.id == p.id,
+                        modifier = if (backTarget == "provider:${p.id}") Modifier.focusRequester(filterFocus) else Modifier,
+                    ) { state.noteRequestFilter("provider:${p.id}"); state.chooseRequestProvider(p) }
                 }
             }
         }
@@ -200,7 +251,7 @@ fun RequestScreen(state: LauncherState) {
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 40.dp),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().onFocusChanged { state.requestGridFocused = it.hasFocus },
         ) {
             items(state.requestItems, key = { it.key }) { m ->
                 // Scores are fetched for the posters actually on screen, not the whole list.
@@ -221,10 +272,10 @@ fun RequestScreen(state: LauncherState) {
 
 /** A filter choice: outlined in the accent colour when it's the one in use. */
 @Composable
-private fun FilterChip(label: String, selected: Boolean = false, onClick: () -> Unit) {
+private fun FilterChip(label: String, selected: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
     androidx.tv.material3.Surface(
         onClick = { Sfx.select(); onClick() },
-        modifier = Modifier.focusSound(1.12f),
+        modifier = modifier.focusSound(1.12f),
         shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
         colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
             containerColor = if (selected) Veil.Accent.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.06f),
@@ -548,6 +599,62 @@ private fun SeasonRow(s: Seerr.Season, ticked: Boolean, modifier: Modifier, onCl
                 else -> null
             }
             if (tag != null) Text(tag, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, color = if (s.taken) Veil.Accent else Veil.Text.copy(alpha = 0.7f))
+        }
+    }
+}
+
+/**
+ * Voice search: the microphone circle pulses with your voice, and what has been understood so far shows
+ * under it. When you stop speaking the search runs by itself; Back (or Cancel) stops listening.
+ */
+@Composable
+fun VoiceDialog(state: LauncherState) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(state.voiceProblem) {
+        if (state.voiceProblem == null) Sfx.open()
+        delay(80)
+        runCatching { first.requestFocus() }
+    }
+    val level by androidx.compose.animation.core.animateFloatAsState(state.voiceLevel, androidx.compose.animation.core.tween(120), label = "mic-level")
+    val listening = state.voiceListening
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = { Sfx.back(); state.stopVoice() },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Column(
+            Modifier.width(340.dp).clip(RoundedCornerShape(20.dp)).background(Veil.Sheet).padding(22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(Modifier.size(84.dp), contentAlignment = Alignment.Center) {
+                // A ring that grows with your voice.
+                Box(
+                    Modifier.size(60.dp)
+                        .graphicsLayer { val s = 1f + 0.4f * level; scaleX = s; scaleY = s; alpha = if (listening) 0.28f else 0f }
+                        .clip(CircleShape).background(Veil.Accent),
+                )
+                Box(
+                    Modifier.size(60.dp).clip(CircleShape).background(if (listening) Veil.Accent else Color.White.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(VeilIcons.Mic, contentDescription = null, modifier = Modifier.size(26.dp), tint = if (listening) Veil.Ink else Veil.Text)
+                }
+            }
+            Text(if (listening) "Listening\u2026" else "Voice search", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+            Text(
+                state.voiceProblem ?: state.voiceHeard.ifEmpty { "Say the name of a movie or show" },
+                fontSize = 11.sp, lineHeight = 15.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                color = Veil.Text.copy(alpha = if (state.voiceProblem != null || state.voiceHeard.isEmpty()) 0.65f else 1f),
+                modifier = Modifier.heightIn(min = 32.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (state.voiceProblem != null) {
+                    FilterChip("Try again", modifier = Modifier.focusRequester(first)) { state.startVoiceSearch() }
+                    FilterChip("Cancel") { state.stopVoice() }
+                } else {
+                    FilterChip("Cancel", modifier = Modifier.focusRequester(first)) { state.stopVoice() }
+                }
+            }
         }
     }
 }
