@@ -1,6 +1,8 @@
 # Installing Veil: instructions for the AI agent
 
 You are helping a person install **Veil**, a custom Android TV home screen, from the source in `source/`.
+This copy is a modified Veil: next to the original features it can use a **Plex** server as the source for
+Continue watching / Recently added, and it has a **Request** screen for a **Seerr** server (see `README.md`).
 Read this whole file before you start. `README.md` is the person's overview. Point them to it for what
 Veil does and why it needs each permission.
 
@@ -47,7 +49,7 @@ adb shell cat /proc/meminfo | head -1           # RAM
 adb shell wm size                               # screen resolution (UI is designed for 1920x1080)
 adb shell dumpsys SurfaceFlinger | grep -i "GLES"   # GPU + OpenGL ES version (visualizer needs ES 3.0)
 adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME
-adb shell pm list packages | grep -i -E "nuvio|stremio|spotify"
+adb shell pm list packages | grep -i -E "nuvio|stremio|spotify|plexapp"
 ```
 Stop and tell the person if the TV runs older than Android 9. If OpenGL ES is below 3.0, Veil still
 works; the visualizer is simply unavailable, and music mode uses the album-art screen.
@@ -127,6 +129,19 @@ Walk them through getting each key:
     week" always equals "today". The change only keeps data from then on, so the weekly count fills in over
     the following days.
   - If **no**: leave both empty.
+- **Plex** (optional, for Continue watching and Recently added from the person's own Plex server): **nothing
+  to put in `keys.properties`.** Ask whether they use Plex. If so, they pick **Plex** on the TV under
+  *Connect a tracker* and type the 4-character code at plex.tv/link. The **Plex app has to be installed**
+  on the TV to play anything. Veil opens Plex first and starts the title after a few seconds; the wait is
+  the *Plex → Wait before playing* slider in the Veil menu (default 5 s).
+- **SEERR_URL and SEERR_API_KEY** (optional, for the **Request** screen): **ask the person whether they run
+  a Seerr (Overseerr / Jellyseerr) server.** Explain it first: Veil gets a **Request** button next to the
+  *veil* button, where they can search, browse by streaming service, see scores and details, and request
+  a movie, a show or specific seasons. Without it the button is hidden. They give `SEERR_URL` (the https
+  address of their server, no path) and `SEERR_API_KEY` (Seerr > Settings > General). Never print the key
+  back in full. Seerr approves requests made with an admin API key on its own, so a request may start a
+  download at once. Never send a test request without asking first. If the address only exists on their
+  home network, that is fine: Veil asks the router's DNS for it, also while ad blocking is on.
 - **WEATHER_CITY** (optional): a city name. It can also be set later on the TV in the Veil menu.
 - **UPDATE_CHECK**: **ask the person** whether Veil may check for updates. If yes (the default), once a
   day Veil asks GitHub's public API for the date of its latest code change and, if it's newer than their
@@ -182,6 +197,10 @@ Fresh installs need all the grants above. Updates (`install -r`) keep them.
 flash). That's expected and accepted. On other TVs Home usually opens Veil directly. Don't disable the stock
 launcher to "fix" the flash (rule 1).
 
+**Double press of Home** opens the TV's own recent-apps screen (switch to a running app, or close it with
+*Dismiss*); this is experimental and may not work on every TV. A single press waits about a third of a
+second to tell the two apart. If a TV misbehaves, the helper is `HomeButtonService.kt`.
+
 ---
 
 ## 5. First run and checks (the person uses the remote)
@@ -200,6 +219,18 @@ Guide them through, and confirm each works:
 6. **Privacy pill**: turning it on enables encrypted DNS. Browse a bit to check sites still load. Pause/off work.
 7. **Music**: play something in Spotify or similar, then open Ambient (Veil menu → *Start Veil Ambient*, or wait
    for the screensaver). Album art and lyrics, or the visualizer, should react.
+8. **Plex** (only if they use it): *Connect a tracker* → Plex, enter the code at plex.tv/link, and Continue
+   watching fills in. The pill next to the row title switches to **Recently added** and back. OK on a card
+   should start the title in the Plex app after the wait; if Plex says "Server niet bereikbaar / Failed to
+   fetch play queue response", raise *Wait before playing* in the Veil menu and try again (Plex then needs
+   to be closed and reopened, because it stays stuck after that error).
+9. **Request** (only with a Seerr server): the **Request** button next to *veil* opens the screen. Check
+   trending loads, the Movies / TV shows, Popular / Latest, streaming-service and *In my library* filters,
+   **More** (36 titles at a time), a title's details window (description, genres, cast, scores) with the
+   actions on its right, and **Choose seasons…** on a show. Don't press a request button while testing
+   unless the person agrees: it creates a real request.
+10. **Home double press** (optional): two quick presses of the remote's Home button should show the TV's
+    recent apps.
 
 Useful logs: `adb logcat -s VeilViz VeilAudio AndroidRuntime`
 - `VeilViz` logs the visualizer's fps every 10 s.
@@ -258,6 +289,9 @@ built it (the signing key lives there):
    see Troubleshooting and ask before uninstalling (that resets everything).
 6. **Check:** Home still opens Veil, and the dot on the "veil" button is gone.
 
+The *Update available* dot in this version follows https://github.com/Jaarden/Veil-Custom (`REPO` in
+`UpdateCheck.kt`), so `git pull` should come from that repository.
+
 The section-0 rules still apply: don't press buttons on the TV while they use it, no force-stop.
 
 ---
@@ -291,3 +325,10 @@ Rules that keep Veil smooth on weak TV GPUs:
   GPU lacks OpenGL ES 3.0.
 - **The TV's ADB port changes after a reboot** (wireless debugging): reconnect with `adb mdns services` /
   `adb connect`.
+- **Plex shows "Server niet bereikbaar" / "Failed to fetch play queue response"**: Plex was asked to play
+  before it had connected to the server. Raise *Wait before playing* in the Veil menu, close Plex
+  (Home double press → *Dismiss*, or restart it) and try again.
+- **Request says "Couldn't reach Seerr"**: check `SEERR_URL` (https, no path) and `SEERR_API_KEY`, that the
+  TV can reach the server (`adb shell ping <host>`), and that its certificate is valid. Rebuild after
+  changing keys. Look for `VeilSeerr` in `adb logcat`.
+- **No Request button**: `SEERR_URL` or `SEERR_API_KEY` was empty when the app was built.

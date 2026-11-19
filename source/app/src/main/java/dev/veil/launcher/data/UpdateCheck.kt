@@ -8,7 +8,8 @@ import java.time.Instant
  * commit that changed source/ (README or website edits don't count). No account, ID or device info is sent.
  */
 object UpdateCheck {
-    const val REPO = "trbrnt/Veil"
+    /** This modified Veil's own repository (the original is trbrnt/Veil). */
+    const val REPO = "Jaarden/Veil-Custom"
 
     data class Update(val sha: String, val time: Long, val title: String)
 

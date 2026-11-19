@@ -121,7 +121,7 @@ A TV can't ask for these with a pop-up, so they're granted over ADB (the install
     and requests. Seerr itself looks up the IMDb and Rotten Tomatoes scores. If its address only exists on
     your home network and ad blocking's outside DNS can't find it, Veil asks your router's DNS for that one
     name and connects there, still checking the certificate against the real host name.
-  - **GitHub**: once a day, asks for the date of Veil's latest code change, to show "update available"
+  - **GitHub**: once a day, asks for the date of the latest code change in `Jaarden/Veil-Custom`, to show "update available"
     in the Veil menu. Nothing about you is sent. Switch it off in the Veil menu, or with
     `UPDATE_CHECK=false` in `keys.properties`.
 - **Your tracker login** stays on the TV, in Veil's private storage (excluded from Android backups).
@@ -137,8 +137,8 @@ available**. Ask your AI agent to update Veil: it follows the *Updating Veil* se
 [`AGENT_INSTALL.md`](AGENT_INSTALL.md) (pull, rebuild on the same computer, install over the old one). Your
 permissions, sign-in and settings stay as they are.
 
-In this modified version the *Update available* dot still compares against the original Veil repository
-(`trbrnt/Veil`), not this one.
+The *Update available* dot follows this repository (`Jaarden/Veil-Custom`). If you fork it again, change
+`REPO` in `source/app/src/main/java/dev/veil/launcher/data/UpdateCheck.kt`.
 
 ## Undo
 
