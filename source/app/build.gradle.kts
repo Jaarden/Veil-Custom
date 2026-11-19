@@ -61,6 +61,9 @@ android {
         buildConfigField("String", "NEXTDNS_PROFILE", key("NEXTDNS_PROFILE"))
         buildConfigField("String", "NEXTDNS_API_KEY", key("NEXTDNS_API_KEY"))
         buildConfigField("String", "WEATHER_CITY", key("WEATHER_CITY"))
+        // Optional: your own Seerr (Overseerr/Jellyseerr) server, for the Request screen.
+        buildConfigField("String", "SEERR_URL", key("SEERR_URL"))
+        buildConfigField("String", "SEERR_API_KEY", key("SEERR_API_KEY"))
         // "Update available" in the Veil menu: one request a day to GitHub's public API. On unless
         // keys.properties has UPDATE_CHECK=false (it can also be switched off on the TV).
         buildConfigField("boolean", "UPDATE_CHECK", (keys.getProperty("UPDATE_CHECK", "true").trim() != "false").toString())

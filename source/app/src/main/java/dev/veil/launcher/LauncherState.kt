@@ -33,9 +33,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 
-enum class Screen { HOME, DRAWER, CONNECT }
+enum class Screen { HOME, DRAWER, CONNECT, REQUEST }
 
 /** The hold-OK menu: which app it is for, and whether it was opened from the Home row. */
 data class AppSheet(val app: AppEntry, val fromHome: Boolean)
@@ -49,6 +51,7 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
     val trakt = Trakt(context)
     private val simkl = Simkl(context)
     private val mdblist = MdbList(context)
+    private val plex = dev.veil.launcher.data.Plex(context)
     private val tmdb = Tmdb(BuildConfig.TMDB_KEY)
     private val prefs = context.getSharedPreferences("veil", Context.MODE_PRIVATE)
 
@@ -60,6 +63,7 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
         Service.TRAKT -> trakt
         Service.SIMKL -> simkl
         Service.MDBLIST -> mdblist
+        Service.PLEX -> plex
     }
     /** Whether a service has a client ID in this build (otherwise it's shown as not available). */
     fun available(s: Service) = trackerFor(s).hasKeys || s == Service.TRAKT
@@ -217,9 +221,32 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
         }
     }
 
+    /** What Home's top row shows. Recently added needs a source that has a library (Plex). */
+    enum class HomeRow { CONTINUE, ADDED }
+
+    var homeRow by mutableStateOf(if (prefs.getString("row", null) == "added") HomeRow.ADDED else HomeRow.CONTINUE)
+        private set
+    /** The connected source can show both rows, so Home offers the switch. */
+    val canSwitchRow: Boolean get() = connected && trackerFor(service).hasRecentlyAdded
+    /** Recently added is on screen (the choice is kept, but only applies to a source that has it). */
+    val showingAdded: Boolean get() = homeRow == HomeRow.ADDED && trackerFor(service).hasRecentlyAdded
+    private var reloadWhenDone = false
+
+    /** Switches Home's top row between Continue watching and Recently added. */
+    fun toggleRow() {
+        homeRow = if (homeRow == HomeRow.ADDED) HomeRow.CONTINUE else HomeRow.ADDED
+        prefs.edit().putString("row", if (homeRow == HomeRow.ADDED) "added" else "continue").apply()
+        items = emptyList()
+        focused = null
+        focusedIndex = 0
+        error = null
+        refreshWatching(force = true)
+    }
+
     fun refreshWatching(force: Boolean = false) {
         connected = tracker.isConnected
-        if (!connected || loading) return
+        if (!connected) return
+        if (loading) { if (force) reloadWhenDone = true; return } // e.g. the row was switched mid-load
         val now = System.currentTimeMillis()
         if (!force && now - lastLoad < 30_000) return
         lastLoad = now
@@ -227,8 +254,11 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
             loading = true
             try {
                 val source = tracker
-                val result = withContext(Dispatchers.IO) { ContinueWatching.withArt(source.continueWatching(), tmdb) }
-                if (source !== tracker) return@launch // switched service while loading
+                val added = showingAdded
+                val result = withContext(Dispatchers.IO) {
+                    ContinueWatching.withArt(if (added) source.recentlyAdded() else source.continueWatching(), tmdb)
+                }
+                if (source !== tracker || added != showingAdded) return@launch // switched service or row while loading
                 items = result
                 VeilCache.items = result
                 val keep = result.firstOrNull { it.key == focused?.key }
@@ -240,6 +270,7 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
             } finally {
                 loading = false
                 connected = tracker.isConnected
+                if (reloadWhenDone) { reloadWhenDone = false; refreshWatching(force = true) }
             }
         }
     }
@@ -374,6 +405,152 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
     var musicSheet by mutableStateOf(false)
     /** Hold menu for a Continue Watching card. */
     var watchSheet by mutableStateOf<WatchItem?>(null)
+
+    // ---- Request screen (Seerr): search for a movie or show and request it for your library ----
+    val seerr = dev.veil.launcher.data.Seerr(context, BuildConfig.SEERR_URL, BuildConfig.SEERR_API_KEY)
+    /** Search results, or what's trending while the search box is empty. */
+    var requestItems by mutableStateOf<List<dev.veil.launcher.data.Seerr.Media>>(emptyList())
+        private set
+    var requestQuery by mutableStateOf("")
+        private set
+    var requestLoading by mutableStateOf(false)
+        private set
+    var requestError by mutableStateOf<String?>(null)
+        private set
+    /** The "Request this?" menu for a poster. */
+    var requestSheet by mutableStateOf<dev.veil.launcher.data.Seerr.Media?>(null)
+    private var requestJob: Job? = null
+
+    /** IMDb / Rotten Tomatoes scores per poster (by [dev.veil.launcher.data.Seerr.Media.key]), filled in as posters come on screen. */
+    val requestRatings = androidx.compose.runtime.mutableStateMapOf<String, dev.veil.launcher.data.Seerr.Ratings>()
+    private val ratingsAsked = HashSet<String>()
+    /** A few at a time: every lookup makes Seerr ask IMDb and Rotten Tomatoes. */
+    private val ratingsGate = kotlinx.coroutines.sync.Semaphore(4)
+
+    /** Called when a poster appears. Each title is looked up once; a failed lookup just leaves no scores. */
+    fun loadRatings(m: dev.veil.launcher.data.Seerr.Media) {
+        if (!ratingsAsked.add(m.key)) return
+        scope.launch {
+            val r = ratingsGate.withPermit { withContext(Dispatchers.IO) { runCatching { seerr.ratings(m) }.getOrNull() } }
+            if (r != null) requestRatings[m.key] = r else ratingsAsked.remove(m.key)
+        }
+    }
+
+    /** Filters on the Request screen. */
+    enum class RequestType(val title: String) { ALL("All"), MOVIES("Movies"), SHOWS("TV shows") }
+
+    var requestType by mutableStateOf(RequestType.ALL)
+        private set
+    /** Newest first instead of most popular. */
+    var requestLatest by mutableStateOf(false)
+        private set
+    /** Only what's on this streaming service (null: anywhere). */
+    var requestProvider by mutableStateOf<dev.veil.launcher.data.Seerr.Provider?>(null)
+        private set
+    var requestProviders by mutableStateOf<List<dev.veil.launcher.data.Seerr.Provider>>(emptyList())
+        private set
+    /** Only what's already in your library (to play it, rather than request it). */
+    var requestInLibrary by mutableStateOf(false)
+        private set
+    fun toggleRequestInLibrary() { requestInLibrary = !requestInLibrary; loadRequests() }
+    /** Streaming catalogues differ per country; the TV's own country setting decides. */
+    private val region: String get() = java.util.Locale.getDefault().country.ifEmpty { "US" }
+
+    fun openRequests() {
+        screen = Screen.REQUEST
+        if (requestItems.isEmpty() || requestError != null) loadRequests()
+        if (requestProviders.isEmpty()) scope.launch {
+            requestProviders = withContext(Dispatchers.IO) { runCatching { seerr.providers(region) }.getOrDefault(emptyList()) }
+        }
+    }
+
+    /** An empty search goes back to browsing with the filters. */
+    fun searchRequests(query: String) { requestQuery = query.trim(); loadRequests() }
+    fun chooseRequestType(t: RequestType) { if (t != requestType) { requestType = t; loadRequests() } }
+    fun chooseRequestLatest(latest: Boolean) { if (latest != requestLatest) { requestLatest = latest; loadRequests() } }
+    /** Picking a service leaves search and goes to browsing: a search can't be limited to one service. */
+    fun chooseRequestProvider(p: dev.veil.launcher.data.Seerr.Provider?) {
+        if (p == requestProvider) return
+        requestProvider = p
+        if (p != null) requestQuery = ""
+        loadRequests()
+    }
+
+    /** What the Request screen is showing, in words ("Latest movies on Netflix"). */
+    val requestSummary: String
+        get() {
+            val what = when {
+                requestQuery.isNotEmpty() -> "Results for \u201C$requestQuery\u201D"
+                requestType == RequestType.ALL && !requestLatest && requestProvider == null -> "Trending now"
+                else -> {
+                    val kind = when (requestType) { RequestType.ALL -> "movies and shows"; RequestType.MOVIES -> "movies"; RequestType.SHOWS -> "TV shows" }
+                    (if (requestLatest) "Latest " else "Popular ") + kind + (requestProvider?.let { " on ${it.name}" } ?: "")
+                }
+            }
+            return if (requestInLibrary) "$what \u00B7 in your library" else what
+        }
+
+    private fun loadRequests() {
+        requestJob?.cancel()
+        requestJob = scope.launch {
+            requestLoading = true
+            requestError = null
+            try {
+                val q = requestQuery; val type = requestType; val latest = requestLatest; val provider = requestProvider?.id; val country = region
+                val onlyLibrary = requestInLibrary
+                // "In your library" keeps only a few of each page, so it looks through several pages at once.
+                val pages = if (onlyLibrary) 1..5 else 1..1
+                requestItems = withContext(Dispatchers.IO) {
+                    kotlinx.coroutines.coroutineScope {
+                        pages.map { page ->
+                            async {
+                                val list = when {
+                                    q.isNotEmpty() -> seerr.search(q, page).filter {
+                                        type == RequestType.ALL || (type == RequestType.MOVIES) == it.isMovie
+                                    }
+                                    type == RequestType.ALL && !latest && provider == null -> seerr.trending(page)
+                                    else -> {
+                                        val movies = if (type != RequestType.SHOWS) seerr.discover(true, latest, provider, country, page) else emptyList()
+                                        val shows = if (type != RequestType.MOVIES) seerr.discover(false, latest, provider, country, page) else emptyList()
+                                        val all = movies + shows
+                                        if (movies.isEmpty() || shows.isEmpty()) all
+                                        else if (latest) all.sortedByDescending { it.date.orEmpty() } else all.sortedByDescending { it.popularity }
+                                    }
+                                }
+                                // The first page must load; later pages are a bonus.
+                                list
+                            }
+                        }.mapIndexed { i, d -> if (i == 0) d.await() else runCatching { d.await() }.getOrDefault(emptyList()) }
+                            .flatten()
+                            .filter { !onlyLibrary || it.inLibrary }
+                            .distinctBy { it.key }
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("VeilSeerr", "search failed", e)
+                requestItems = emptyList()
+                requestError = "Couldn't reach Seerr"
+            } finally {
+                requestLoading = false
+            }
+        }
+    }
+
+    fun request(m: dev.veil.launcher.data.Seerr.Media) {
+        scope.launch {
+            val problem = withContext(Dispatchers.IO) { runCatching { seerr.request(m) }.getOrElse { "Couldn't reach Seerr" } }
+            if (problem == null) {
+                dev.veil.launcher.ui.Sfx.success()
+                showToast("Requested ${m.title}")
+                requestItems = requestItems.map { if (it.key == m.key) it.copy(status = dev.veil.launcher.data.Seerr.PENDING) else it }
+            } else {
+                dev.veil.launcher.ui.Sfx.error()
+                showToast("${m.title}: $problem")
+            }
+        }
+    }
 
     // ---- Short confirmation message at the bottom of the screen ----
     var toast by mutableStateOf<String?>(null)
@@ -559,7 +736,7 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
     /** Music playing: ambient after 30 s idle on Home. Otherwise after 5 min. */
     fun checkIdle() {
         if (ambient || screen != Screen.HOME || sheet != null || privacySheet || musicSheet || weatherPicker ||
-            vizSettingsOpen || updateDialog || watchSheet != null
+            vizSettingsOpen || updateDialog || watchSheet != null || requestSheet != null
         ) return
         val idle = System.currentTimeMillis() - lastInput
         val playing = nowPlaying.track?.playing == true
@@ -573,7 +750,7 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
             ?.let { start(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
 
-    // ---- Tracker sign-in (Trakt, Simkl or MDBList) ---------------------------------------------
+    // ---- Tracker sign-in (Trakt, Simkl, MDBList or Plex) ---------------------------------------------
 
     /** Opens the Connect screen on the service picker. */
     fun startConnect() {
@@ -735,8 +912,68 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
 
     /** Opens the item in the chosen player, straight to its streams. */
     fun open(item: WatchItem) {
+        if (service == Service.PLEX) { openInPlex(item); return }
         if (effectivePlayer() == Player.STREMIO) openInStremio(item) else openInNuvio(item)
     }
+
+    /** A title from the Request screen that's already in your library: find it on your Plex server and play it. */
+    fun playOnPlex(m: dev.veil.launcher.data.Seerr.Media) {
+        if (!plex.isConnected) {
+            dev.veil.launcher.ui.Sfx.error()
+            showToast("Connect Plex first (Home \u2192 Connect a tracker), so Veil can find it on your server")
+            return
+        }
+        scope.launch {
+            val id = withContext(Dispatchers.IO) {
+                runCatching { plex.findPlayable(m.isMovie, m.title, m.year, m.id) }
+                    .onFailure { android.util.Log.w("VeilPlex", "find failed", it) }.getOrNull()
+            }
+            if (id != null) startPlex(id)
+            else { dev.veil.launcher.ui.Sfx.error(); showToast("Couldn't find ${m.title} on your Plex server") }
+        }
+    }
+
+    /** Starts the episode or movie in the Plex app, else just opens the app. */
+    private fun openInPlex(item: WatchItem) = startPlex(item.serviceId)
+
+    private var plexJob: Job? = null
+
+    /** Seconds the Plex app gets to connect to your server before it's asked to play (Veil menu). */
+    var plexWait by mutableStateOf(prefs.getInt("plex_wait", DEFAULT_PLEX_WAIT).coerceIn(0, 15))
+        private set
+
+    fun choosePlexWait(seconds: Int) {
+        plexWait = seconds.coerceIn(0, 15)
+        prefs.edit().putInt("plex_wait", plexWait).apply()
+    }
+
+    /**
+     * Opens the Plex app, then starts the title a few seconds later. The Plex app can only start a title
+     * once it has connected to your server: a play link that arrives while it is still starting fails with
+     * "Failed to fetch play queue response", and it then stays stuck until it's restarted. Measured on
+     * Plex for Android TV 2026.22: 2 s after opening is too early, 3-4 s works; when Plex was already
+     * running the wait does no harm.
+     */
+    private fun startPlex(serviceId: String?) {
+        val pkg = dev.veil.launcher.data.Plex.APP_PKG
+        val app = context.packageManager.getLeanbackLaunchIntentForPackage(pkg)
+        if (app == null) { dev.veil.launcher.ui.Sfx.error(); showToast("The Plex app isn't installed on this TV"); return }
+        val play = dev.veil.launcher.data.Plex.deepLink(serviceId)?.let {
+            Intent(Intent.ACTION_VIEW, Uri.parse(it)).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        plexJob?.cancel()
+        val wait = plexWait
+        // No wait chosen: just send the title (fine while Plex is already running).
+        if (wait == 0 && play != null && start(play)) return
+        if (!start(app.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) || play == null) return
+        plexJob = scope.launch {
+            delay(wait * 1000L)
+            start(play)
+        }
+    }
+
+    /** Back on Veil before the title started (you pressed Home): don't pull Plex up again. */
+    fun cancelPlexStart() { plexJob?.cancel(); plexJob = null }
 
     /** stremio:///detail/{type}/{imdb}/{videoId}: the episode's (or movie's) stream list. */
     private fun openInStremio(item: WatchItem) {
@@ -791,6 +1028,8 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
     }
 
     companion object {
+        /** Default seconds the Plex app gets to connect to the server before it's asked to play. */
+        private const val DEFAULT_PLEX_WAIT = 5
         const val NUVIO = "com.nuvio.tv"
         const val NUVIO_PKG = NUVIO
         const val STREMIO_PKG = "com.stremio.one"

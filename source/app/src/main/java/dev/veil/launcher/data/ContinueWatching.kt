@@ -28,7 +28,12 @@ object ContinueWatching {
                 val id = item.tmdb ?: runCatching { tmdb.find(item.isMovie, item.imdb, item.tvdb) }.getOrNull()
                     ?: return@async item
                 val art = runCatching { tmdb.art(item.isMovie, id) }.getOrNull() ?: return@async item.copy(tmdb = id)
-                item.copy(tmdb = id, backdrop = art.backdrop, thumb = art.thumb, logo = art.logo, poster = art.poster)
+                item.copy(
+                    tmdb = id,
+                    // The source's own artwork (Plex) stays where TMDB has none.
+                    backdrop = art.backdrop ?: item.backdrop, thumb = art.thumb ?: item.thumb,
+                    logo = art.logo ?: item.logo, poster = art.poster ?: item.poster,
+                )
             }
         }.awaitAll()
     }

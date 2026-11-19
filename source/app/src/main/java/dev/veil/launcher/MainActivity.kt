@@ -98,6 +98,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         HomeServiceGuard.ensureEnabled(this)
+        state.cancelPlexStart()
         state.resetIdle()
         state.onResumedForIntro()
         state.refreshExtras()

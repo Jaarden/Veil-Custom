@@ -15,6 +15,15 @@ no tracking.
 
 More in [`screenshots/`](screenshots).
 
+> **This is a modified version** of [Veil](https://github.com/trbrnt/Veil) (GPL-3.0). Changes made here:
+> - **Plex** as a source: Continue Watching and a switchable **Recently added** row straight from your own
+>   Plex server, with artwork; items start in the Plex app (with an adjustable start-up wait in the Veil menu).
+> - **Request** screen for a **Seerr** (Overseerr / Jellyseerr) server: search or browse (movies / TV shows,
+>   popular / latest, per streaming service, already in your library), IMDb and Rotten Tomatoes scores,
+>   request with one press, and *Play on Plex* for what you already have. Set `SEERR_URL` and
+>   `SEERR_API_KEY` in `source/keys.properties`.
+> - Home-network server names keep working while ad blocking's DNS is on.
+
 > **Installing:** Veil is built from source with *your own* API keys. The easiest way is to give this repo
 > to an AI coding agent (for example Claude Code) and ask it to follow
 > **[`AGENT_INSTALL.md`](AGENT_INSTALL.md)**. It checks your TV, asks for your keys, backs up your settings,

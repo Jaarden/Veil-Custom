@@ -155,7 +155,7 @@ private fun VizPreview(onPreset: (String) -> Unit) {
 
 /** A TV slider: focus it, then Left/Right change the value. */
 @Composable
-private fun VSlider(
+internal fun VSlider(
     label: String,
     hint: String,
     value: Float,

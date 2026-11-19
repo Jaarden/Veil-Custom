@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A plain chevron tile in Plex's colours, only to identify the service on the Connect screen. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#1F1F1F"
+        android:pathData="M10.8,0 H37.2 A10.8,10.8 0 0 1 48,10.8 V37.2 A10.8,10.8 0 0 1 37.2,48 H10.8 A10.8,10.8 0 0 1 0,37.2 V10.8 A10.8,10.8 0 0 1 10.8,0 Z" />
+    <path
+        android:fillColor="#E5A00D"
+        android:pathData="M16,10 H24 L33,24 L24,38 H16 L25,24 Z" />
+</vector>

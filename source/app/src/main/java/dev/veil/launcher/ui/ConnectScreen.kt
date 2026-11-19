@@ -76,7 +76,7 @@ private fun SignInStep(state: LauncherState) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     QrCode(dc.qrUrl, Modifier.size(150.dp))
                     Spacer(Modifier.height(8.dp))
-                    Text("Scan with your phone", fontSize = 10.sp, color = Veil.Text.copy(alpha = 0.6f))
+                    Text(if (dc.qrUrl == dc.url) "Scan to open the page" else "Scan with your phone", fontSize = 10.sp, color = Veil.Text.copy(alpha = 0.6f))
                 }
                 Spacer(Modifier.width(44.dp))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -125,7 +125,7 @@ private fun ServicePicker(state: LauncherState) {
         fontSize = 12.sp, color = Veil.Text.copy(alpha = 0.65f),
     )
     Spacer(Modifier.height(26.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Service.entries.forEach { s ->
             ServiceCard(
                 state, s,
@@ -145,7 +145,7 @@ private fun ServiceCard(state: LauncherState, s: Service, modifier: Modifier) {
     val isCurrent = s == state.service && state.connected
     androidx.tv.material3.Surface(
         onClick = { Sfx.select(); state.chooseService(s) },
-        modifier = modifier.width(230.dp).height(176.dp).focusSound(1.12f),
+        modifier = modifier.width(204.dp).height(176.dp).focusSound(1.12f),
         shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(RoundedCornerShape(20.dp)),
         colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
             containerColor = Veil.Glass, contentColor = Veil.Text,
@@ -184,6 +184,7 @@ private fun logoOf(s: Service): Int = when (s) {
     Service.TRAKT -> dev.veil.launcher.R.drawable.logo_trakt
     Service.SIMKL -> dev.veil.launcher.R.drawable.logo_simkl
     Service.MDBLIST -> dev.veil.launcher.R.drawable.logo_mdblist
+    Service.PLEX -> dev.veil.launcher.R.drawable.logo_plex
 }
 
 /** Client ID of your own Trakt app. Saved on the TV, so it survives Veil updates. */

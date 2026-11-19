@@ -252,6 +252,18 @@ private fun VeilPanel(state: LauncherState, firstItem: FocusRequester) {
             }
         }
 
+        // Plex: how long the Plex app gets to start up before Veil asks it to play
+        if (state.service == dev.veil.launcher.data.Service.PLEX) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionLabel("PLEX")
+                VSlider(
+                    "Wait before playing",
+                    "Veil opens Plex, waits, then starts your title. Raise this if Plex says the server is unreachable; lower it to start sooner. 0 starts right away.",
+                    state.plexWait.toFloat(), 0f, 15f, 1f, { "${it.toInt()} s" },
+                ) { state.choosePlexWait(it.toInt()) }
+            }
+        }
+
         // Music mode: what Veil Ambient shows while music plays
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionLabel("MUSIC MODE")

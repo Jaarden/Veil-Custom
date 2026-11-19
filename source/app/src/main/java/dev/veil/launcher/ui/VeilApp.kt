@@ -36,6 +36,7 @@ fun VeilApp(state: LauncherState) {
             Screen.HOME -> Unit
             Screen.DRAWER -> { Sfx.back(); state.screen = Screen.HOME }
             Screen.CONNECT -> { Sfx.back(); state.connectBack() }
+            Screen.REQUEST -> { Sfx.back(); state.screen = Screen.HOME }
         }
     }
     // Once Ambient fully covers the screen, stop drawing the page underneath it.
@@ -53,6 +54,7 @@ fun VeilApp(state: LauncherState) {
                 Screen.HOME -> HomeScreen(state)
                 Screen.DRAWER -> DrawerScreen(state)
                 Screen.CONNECT -> ConnectScreen(state)
+                Screen.REQUEST -> RequestScreen(state)
             }
         }
     }
@@ -60,6 +62,7 @@ fun VeilApp(state: LauncherState) {
     if (state.privacySheet) PrivacyMenu(state)
     if (state.musicSheet) MusicMenu(state)
     state.watchSheet?.let { WatchMenu(state, it) }
+    state.requestSheet?.let { RequestMenu(state, it) }
 
     // Short confirmation ("Marked … as watched"), bottom centre
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
@@ -124,10 +127,11 @@ private fun PrivacyMenu(state: LauncherState) {
 
 @Composable
 private fun WatchMenu(state: LauncherState, item: WatchItem) {
-    val actions = listOf(
+    val actions = listOfNotNull(
         SheetAction("Play", VeilIcons.Play) { state.open(item) },
         SheetAction("Mark as watched", VeilIcons.Check) { state.markWatched(item) },
-        SheetAction("Remove from Continue Watching", VeilIcons.Unpin) { state.removeFromRow(item) },
+        // Recently added items aren't in Continue Watching, so there's nothing to remove.
+        if (item.added) null else SheetAction("Remove from Continue Watching", VeilIcons.Unpin) { state.removeFromRow(item) },
     )
     val title = if (item.isMovie) item.title else "${item.title} · S${item.season} E${item.episode}"
     ActionSheet(title = title, actions = actions, onDismiss = { state.watchSheet = null })

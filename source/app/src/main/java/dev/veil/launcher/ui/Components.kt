@@ -185,6 +185,11 @@ fun TopBar(state: LauncherState, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(34.dp)) {
         Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) {
             VeilMenuAnchor(state)
+            // Request a movie or show (only when a Seerr server is set up in this build; not on its own screen).
+            if (state.seerr.enabled && state.screen != dev.veil.launcher.Screen.REQUEST) {
+                Spacer(Modifier.width(10.dp))
+                RequestPill(onClick = state::openRequests, short = state.nowPlaying.track != null)
+            }
             state.nowPlaying.track?.let { track ->
                 Spacer(Modifier.width(14.dp))
                 NowPlayingPill(track, onToggle = state.nowPlaying::togglePlayPause, onHold = { state.musicSheet = true })

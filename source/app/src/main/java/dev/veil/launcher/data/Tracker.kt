@@ -7,6 +7,7 @@ enum class Service(val id: String, val title: String, val blurb: String) {
     TRAKT("trakt", "Trakt", "The most widely used tracker. Nuvio syncs to it."),
     SIMKL("simkl", "Simkl", "Tracks TV, anime and movies, with a free API."),
     MDBLIST("mdblist", "MDBList", "Lists, ratings and Up Next, popular with Stremio users."),
+    PLEX("plex", "Plex", "Continue Watching from your own Plex server. Opens in the Plex app."),
     ;
 
     companion object {
@@ -20,6 +21,7 @@ fun currentTracker(context: android.content.Context): Tracker =
         Service.TRAKT -> Trakt(context)
         Service.SIMKL -> Simkl(context)
         Service.MDBLIST -> MdbList(context)
+        Service.PLEX -> Plex(context)
     }
 
 /** A device-code sign-in in progress: show [userCode] and [url], or the QR of [qrUrl] (code filled in). */
@@ -48,6 +50,10 @@ interface Tracker {
     fun disconnect()
     /** Paused items and next episodes, newest first, without artwork (see [ContinueWatching.withArt]). */
     suspend fun continueWatching(): List<WatchItem>
+    /** The source also knows what was newly added to your library (Plex), for Home's second row. */
+    val hasRecentlyAdded: Boolean get() = false
+    /** Newly added movies and shows, newest first, without artwork. */
+    suspend fun recentlyAdded(): List<WatchItem> = emptyList()
     /** Adds the episode/movie to watch history (watched now) and clears its paused progress. */
     fun markWatched(item: WatchItem): Boolean
     /** Takes the item out of Continue Watching on the service itself. */

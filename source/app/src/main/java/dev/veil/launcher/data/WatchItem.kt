@@ -19,6 +19,8 @@ data class WatchItem(
     val upNext: Boolean = false,
     /** The up-next episode aired after you last watched this show (within the last two weeks). */
     val isNew: Boolean = false,
+    /** From the "Recently added" row (new on your server), not from Continue Watching. */
+    val added: Boolean = false,
     /** The service's id for the paused-progress entry (from /sync/playback), if any. */
     val playbackId: Long? = null,
     val sortTime: Long = 0L,

@@ -239,6 +239,7 @@ private fun HeroBody(hero: WatchItem?, state: LauncherState) {
         }
         Text(
             when {
+                hero.added -> "RECENTLY ADDED"
                 hero.isNew -> "NEW EPISODE"
                 hero.upNext -> "UP NEXT"
                 else -> "CONTINUE"
@@ -274,8 +275,8 @@ private fun HeroBody(hero: WatchItem?, state: LauncherState) {
 private fun ContinueRow(state: LauncherState, focusKey: (String) -> FocusRequester) {
     val listState = rememberLazyListState()
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Row(Modifier.padding(horizontal = EDGE), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            Text("Continue watching", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.padding(horizontal = EDGE), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text(if (state.showingAdded) "Recently added" else "Continue watching", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             if (state.items.size > 1) {
                 Text(
                     "${state.focusedIndex + 1} of ${state.items.size}",
@@ -285,11 +286,25 @@ private fun ContinueRow(state: LauncherState, focusKey: (String) -> FocusRequest
             // Evenings only: a quiet summary of what's queued up.
             val hour = java.util.Calendar.getInstance().apply { timeInMillis = state.minuteTick }.get(java.util.Calendar.HOUR_OF_DAY)
             val queued = state.items.mapNotNull { it.minutesLeft }.sum()
-            if ((hour >= 17 || hour < 3) && queued >= 10) {
+            if ((hour >= 17 || hour < 3) && queued >= 10 && !state.showingAdded) {
                 Text(
                     "·  Tonight · about ${durationText(queued)} to catch up",
                     fontSize = 9.sp, color = Veil.Text.copy(alpha = 0.6f), modifier = Modifier.padding(bottom = 1.dp),
                 )
+            }
+            // The row switch (sources with a library, i.e. Plex): one press swaps what this row shows.
+            if (state.canSwitchRow) {
+                Spacer(Modifier.width(5.dp))
+                Pill(
+                    onClick = state::toggleRow,
+                    modifier = Modifier.remembered(state, "row-switch", focusKey),
+                    padding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        if (state.showingAdded) "Show continue watching" else "Show recently added",
+                        fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
         }
         LazyRow(
@@ -300,12 +315,16 @@ private fun ContinueRow(state: LauncherState, focusKey: (String) -> FocusRequest
         ) {
             when {
                 !state.connected -> item {
-                    MessagePill("Connect a tracker", "Trakt, Simkl or MDBList: show what you're watching", state::startConnect)
+                    MessagePill("Connect a tracker", "Trakt, Simkl, MDBList or Plex: show what you're watching", state::startConnect)
                 }
                 state.items.isEmpty() -> item {
                     MessagePill(
-                        if (state.loading) "Loading…" else (state.error ?: "Nothing in progress"),
-                        if (state.loading) "Fetching from ${state.service.title}" else "Start something in ${state.player.title}",
+                        if (state.loading) "Loading…" else (state.error ?: if (state.showingAdded) "Nothing new yet" else "Nothing in progress"),
+                        when {
+                            state.loading -> "Fetching from ${state.service.title}"
+                            state.showingAdded -> "New movies and shows on your server appear here"
+                            else -> "Start something in ${if (state.service == dev.veil.launcher.data.Service.PLEX) "Plex" else state.player.title}"
+                        },
                         { state.refreshWatching(force = true) },
                     )
                 }
