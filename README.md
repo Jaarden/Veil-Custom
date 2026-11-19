@@ -8,8 +8,8 @@ no tracking.
 
 | | |
 |---|---|
-| ![Colours from the artwork](screenshots/02-home-colours-from-artwork.png) | ![Title logos](screenshots/03-home-title-logo.png) |
-| ![Privacy panel](screenshots/04-privacy-panel-nextdns.png) | ![Veil menu](screenshots/05-veil-menu.png) |
+| ![Colours from the artwork](screenshots/02-home-colours-from-artwork.png) | ![Request screen: latest movies on Netflix](screenshots/03-request-latest-netflix.png) |
+| ![Request details](screenshots/04-request-details.png) | ![Veil menu](screenshots/05-veil-menu.png) |
 | ![Synced lyrics](screenshots/07-music-synced-lyrics.png) | ![Word-by-word lyrics](screenshots/08-music-word-by-word-lyrics.png) |
 | ![Visualizer](screenshots/10-visualizer-1.png) | ![Visualizer settings](screenshots/09-visualizer-settings.png) |
 
