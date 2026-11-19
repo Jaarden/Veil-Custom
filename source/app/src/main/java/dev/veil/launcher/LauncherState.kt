@@ -549,6 +549,18 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
         voiceHeard = ""
     }
 
+    /**
+     * Home's rows slide sideways by themselves to centre the card you move to (for example when you go up
+     * from the apps row). Off: moving up or down lands on a card that is already in view and the row stays put;
+     * a row scrolls only to reveal a card that is cut off. The artwork's slow drift is not part of this.
+     */
+    var rowAutoscroll by mutableStateOf(prefs.getBoolean("row_autoscroll", true))
+        private set
+    fun toggleRowAutoscroll() {
+        rowAutoscroll = !rowAutoscroll
+        prefs.edit().putBoolean("row_autoscroll", rowAutoscroll).apply()
+    }
+
     /** Filters on the Request screen. */
     enum class RequestType(val title: String) { ALL("All"), MOVIES("Movies"), SHOWS("TV shows") }
 
@@ -760,7 +772,7 @@ class LauncherState(private val context: Context, private val scope: CoroutineSc
                 showToast(if (seasons == null || m.isMovie) "Requested ${m.title}" else "Requested ${m.title} · " + seasons.joinToString(", ") { "S$it" })
                 // A title that wasn't there at all is now requested; one that is partly there keeps its badge.
                 requestPool = requestPool.map {
-                    if (it.key == m.key && it.status <= 1) it.copy(status = dev.veil.launcher.data.Seerr.PENDING) else it
+                    if (it.key == m.key && (it.status <= 1 || it.seen)) it.copy(status = dev.veil.launcher.data.Seerr.PENDING) else it
                 }
             } else {
                 dev.veil.launcher.ui.Sfx.error()

@@ -381,7 +381,7 @@ fun RequestMenu(state: LauncherState, m: Seerr.Media) {
         )
         // A show with one season requested can still get more seasons.
         m.requested -> if (m.isMovie) emptyList() else listOf(SheetAction("Request more seasons\u2026", VeilIcons.Grid) { state.chooseSeasons(m) })
-        m.isMovie -> listOf(SheetAction("Request this movie", VeilIcons.Search) { state.request(m) })
+        m.isMovie -> listOf(SheetAction(if (m.seen) "Request again" else "Request this movie", VeilIcons.Search) { state.request(m) })
         else -> listOf(SheetAction("Request all seasons", VeilIcons.Search) { state.request(m) }, choose)
     }
     androidx.compose.ui.window.Dialog(
@@ -444,6 +444,7 @@ fun RequestMenu(state: LauncherState, m: Seerr.Media) {
                         m.available -> "IN YOUR LIBRARY"
                         m.status == Seerr.PARTIAL -> "PARTLY IN YOUR LIBRARY"
                         m.requested -> "REQUESTED"
+                        m.seen -> "ALREADY SEEN"
                         else -> "NOT IN YOUR LIBRARY"
                     },
                     fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp,

@@ -310,6 +310,13 @@ private fun VeilPanel(state: LauncherState, firstItem: FocusRequester) {
                 subtitle = "The accent glows in the colours of the show you're on",
                 onClick = state::toggleArtColors,
             )
+            MenuButton(
+                icon = VeilIcons.Grid,
+                title = "Autoscroll: " + if (state.rowAutoscroll) "on" else "off",
+                subtitle = if (state.rowAutoscroll) "Rows slide to centre the card you move to"
+                           else "Rows stay put and only scroll to reveal a cut-off card",
+                onClick = state::toggleRowAutoscroll,
+            )
         }
 
         // Weather location

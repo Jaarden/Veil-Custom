@@ -27,9 +27,13 @@ More in [`screenshots/`](screenshots).
 >   **streaming service** (for example *the latest movies on Netflix*) and **In my library**; 36 titles at a
 >   time, and more load by themselves as you scroll; IMDb and Rotten Tomatoes scores on the posters; a details window with
 >   description, genres, release date, cast and more; and on its right side the actions: request a movie,
->   a whole show, **specific seasons** or all missing seasons, or **Play on Plex** for what you already own.
+>   a whole show, **specific seasons** or all missing seasons, or **Play on Plex** for what you already own. Titles Seerr lists as deleted from your library are marked
+>   **Already seen**.
 > - **Double press of Home** opens the TV's recent-apps screen, where running apps can be switched to or
 >   closed (experimental; a single press now waits about a third of a second to tell the two apart).
+> - An **Autoscroll** setting in the Settings menu: switch it off and Home's rows no longer slide sideways
+>   to centre the card you move to when you go up or down; you land on a card that is already in view and
+>   a row scrolls only to reveal a card that is cut off. The artwork's slow pan and zoom is unaffected.
 > - Home-network server names (like your Seerr's) keep working while ad blocking's DNS is on: the name is
 >   asked from your router and the connection is still verified against the real host name.
 >

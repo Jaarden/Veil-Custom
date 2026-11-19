@@ -219,7 +219,7 @@ Guide them through, and confirm each works:
 4. **Apps row**: Veil starts with TizenTube, Nuvio and Spotify pinned. Any of them that isn't installed is
    simply left out (the row always ends with *All apps*). Help them pin their own apps: *All apps* → hold
    OK on an app → *Pin to Home*. Pinned apps can be moved left/right the same way.
-5. **Settings menu** (OK on the "Settings" button top left): theme, weather city, music
+5. **Settings menu** (OK on the "Settings" button top left): theme, autoscroll, weather city, music
    mode (album art + lyrics, or visualizer), visualizer settings.
 6. **Privacy pill**: turning it on enables encrypted DNS. Browse a bit to check sites still load. Pause/off work.
 7. **Music**: play something in Spotify or similar, then open Ambient (Settings menu → *Start Veil Ambient*, or wait

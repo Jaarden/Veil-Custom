@@ -32,12 +32,15 @@ class Seerr(private val context: android.content.Context, baseUrl: String, priva
         /** All or part of it is in your library, so there's something to play. */
         val inLibrary: Boolean get() = status == AVAILABLE || status == PARTIAL
         val requested: Boolean get() = status == PENDING || status == PROCESSING
+        /** Seerr has it as deleted: it was in your library once and was removed, so you have most likely seen it. */
+        val seen: Boolean get() = status == DELETED
         /** Badge on the poster, or null when it's neither in your library nor requested. */
         val badge: String?
             get() = when (status) {
                 AVAILABLE -> "Available"
                 PARTIAL -> "Partly available"
                 PENDING, PROCESSING -> "Requested"
+                DELETED -> "Already seen"
                 else -> null
             }
     }
@@ -289,5 +292,6 @@ class Seerr(private val context: android.content.Context, baseUrl: String, priva
         const val PROCESSING = 3
         const val PARTIAL = 4
         const val AVAILABLE = 5
+        const val DELETED = 7
     }
 }

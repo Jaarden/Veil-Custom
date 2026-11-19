@@ -53,6 +53,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -82,6 +84,7 @@ fun HomeScreen(state: LauncherState) {
     val firstFocus = remember { FocusRequester() }
     val requesters = remember { HashMap<String, FocusRequester>() }
     val focusKey: (String) -> FocusRequester = { k -> requesters.getOrPut(k) { FocusRequester() } }
+    val rowMemory = remember { RowMemory() }
 
     // On start and each time Home is pressed: go back to the item last used on Home (e.g. the app you
     // launched); fall back to the first app. Not re-run when the Trakt list loads, so focus never jumps
@@ -145,9 +148,9 @@ fun HomeScreen(state: LauncherState) {
             Column(Modifier.recede(frost)) {
                 Hero(hero, state, Modifier.padding(horizontal = EDGE))
                 Spacer(Modifier.height(24.dp))
-                ContinueRow(state, focusKey)
+                ContinueRow(state, focusKey, rowMemory)
                 Spacer(Modifier.height(14.dp))
-                AppsRow(state, firstFocus, focusKey)
+                AppsRow(state, firstFocus, focusKey, rowMemory)
             }
         }
     }
@@ -272,7 +275,11 @@ private fun HeroBody(hero: WatchItem?, state: LauncherState) {
 }
 
 @Composable
-private fun ContinueRow(state: LauncherState, focusKey: (String) -> FocusRequester) {
+private fun ContinueRow(state: LauncherState, focusKey: (String) -> FocusRequester, memory: RowMemory) =
+    StillRows(!state.rowAutoscroll) { ContinueRowBody(state, focusKey, memory) }
+
+@Composable
+private fun ContinueRowBody(state: LauncherState, focusKey: (String) -> FocusRequester, memory: RowMemory) {
     val listState = rememberLazyListState()
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row(Modifier.padding(horizontal = EDGE), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -297,7 +304,7 @@ private fun ContinueRow(state: LauncherState, focusKey: (String) -> FocusRequest
                 Spacer(Modifier.width(5.dp))
                 Pill(
                     onClick = state::toggleRow,
-                    modifier = Modifier.remembered(state, "row-switch", focusKey),
+                    modifier = Modifier.remembered(state, "row-switch", focusKey).onFocusChanged { if (it.isFocused) memory.centerX = 0f },
                     padding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                 ) {
                     Text(
@@ -311,7 +318,9 @@ private fun ContinueRow(state: LauncherState, focusKey: (String) -> FocusRequest
             state = listState,
             horizontalArrangement = Arrangement.spacedBy(11.dp),
             contentPadding = PaddingValues(start = EDGE, end = EDGE, top = 6.dp, bottom = 8.dp),
-            modifier = Modifier.fillMaxWidth().edgeFade(left = listState.canScrollBackward, right = listState.canScrollForward),
+            modifier = Modifier.fillMaxWidth()
+                .landOnVisibleCard(!state.rowAutoscroll, listState, memory) { k -> focusKey("cw:$k") }
+                .edgeFade(left = listState.canScrollBackward, right = listState.canScrollForward),
         ) {
             when {
                 !state.connected -> item {
@@ -335,7 +344,9 @@ private fun ContinueRow(state: LauncherState, focusKey: (String) -> FocusRequest
                         onLongClick = { state.watchSheet = item },
                         modifier = Modifier
                             .remembered(state, "cw:${item.key}", focusKey)
-                            .onFocusChanged { if (it.isFocused) { state.focused = item; state.focusedIndex = index } },
+                            .onFocusChanged {
+                                if (it.isFocused) { state.focused = item; state.focusedIndex = index; memory.note(listState, item.key) }
+                            },
                     )
                 }
             }
@@ -396,7 +407,11 @@ private fun MessagePill(title: String, body: String, onClick: () -> Unit, modifi
 }
 
 @Composable
-private fun AppsRow(state: LauncherState, firstFocus: FocusRequester, focusKey: (String) -> FocusRequester) {
+private fun AppsRow(state: LauncherState, firstFocus: FocusRequester, focusKey: (String) -> FocusRequester, memory: RowMemory) =
+    StillRows(!state.rowAutoscroll) { AppsRowBody(state, firstFocus, focusKey, memory) }
+
+@Composable
+private fun AppsRowBody(state: LauncherState, firstFocus: FocusRequester, focusKey: (String) -> FocusRequester, memory: RowMemory) {
     val listState = rememberLazyListState()
     val noPins = state.pinnedApps.isEmpty()
     LazyRow(
@@ -404,6 +419,7 @@ private fun AppsRow(state: LauncherState, firstFocus: FocusRequester, focusKey: 
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(start = EDGE, end = EDGE, top = 6.dp, bottom = 8.dp),
         modifier = Modifier.fillMaxWidth()
+            .landOnVisibleCard(!state.rowAutoscroll, listState, memory) { k -> if (k == "all-apps") focusKey("all-apps") else focusKey("app:$k") }
             .edgeFade(left = listState.canScrollBackward, right = listState.canScrollForward),
     ) {
         // Home's default focus: the first pinned app (or All apps when nothing is pinned).
@@ -414,7 +430,8 @@ private fun AppsRow(state: LauncherState, firstFocus: FocusRequester, focusKey: 
                 onLongClick = { state.sheet = AppSheet(app, fromHome = true) },
                 modifier = Modifier
                     .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
-                    .remembered(state, "app:${app.pkg}", focusKey),
+                    .remembered(state, "app:${app.pkg}", focusKey)
+                    .onFocusChanged { if (it.isFocused) memory.note(listState, app.pkg) },
             )
         }
         item(key = "all-apps") {
@@ -422,7 +439,8 @@ private fun AppsRow(state: LauncherState, firstFocus: FocusRequester, focusKey: 
                 onClick = { state.screen = Screen.DRAWER },
                 modifier = Modifier
                     .then(if (noPins) Modifier.focusRequester(firstFocus) else Modifier)
-                    .remembered(state, "all-apps", focusKey),
+                    .remembered(state, "all-apps", focusKey)
+                    .onFocusChanged { if (it.isFocused) memory.note(listState, "all-apps") },
             )
         }
     }
@@ -476,3 +494,65 @@ private fun doneByText(minutes: Int, now: Long): String {
 /** Lets Home return focus to this item later, and records it as the last one used. */
 private fun Modifier.remembered(state: LauncherState, key: String, focusKey: (String) -> FocusRequester): Modifier =
     this.focusRequester(focusKey(key)).onFocusChanged { if (it.isFocused) state.lastFocusKey = key }
+
+/** Where (across the screen) the card you last had focus on sits, so up and down can land on the card above or below it. */
+private class RowMemory {
+    var centerX = 0f
+
+    /** [key]'s card in [list], once it is on screen. */
+    fun note(list: androidx.compose.foundation.lazy.LazyListState, key: Any) {
+        list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }?.let { centerX = (it.offset + it.size / 2f).coerceAtLeast(0f) }
+    }
+}
+
+/**
+ * With [enabled], moving up or down into this row lands on the card in view that is nearest to the card you
+ * came from, so the row never slides on its own (left and right still scroll it as usual). A card that is
+ * cut off at the edge of the screen is never chosen. [requesterFor] gives the focus handle of a card by its
+ * list key.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+private fun Modifier.landOnVisibleCard(
+    enabled: Boolean,
+    list: androidx.compose.foundation.lazy.LazyListState,
+    memory: RowMemory,
+    requesterFor: (String) -> FocusRequester,
+): Modifier = if (!enabled) this else this
+    .focusProperties {
+        enter = {
+            val info = list.layoutInfo
+            val inView = info.visibleItemsInfo.filter { it.offset >= 0 && it.offset + it.size <= info.viewportEndOffset }
+            val best = inView.minByOrNull { kotlin.math.abs(it.offset + it.size / 2f - memory.centerX) }
+            (best?.key as? String)?.let(requesterFor) ?: FocusRequester.Default
+        }
+    }
+    .focusGroup()
+
+/**
+ * Autoscroll off ([still]): a row does not slide to centre the card you move to. It scrolls only as far as
+ * needed to bring a card that is cut off into view (keeping the screen margin), and not at all when the card
+ * is already in view. With autoscroll on the TV's own behaviour is kept.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun StillRows(still: Boolean, content: @Composable () -> Unit) {
+    if (!still) { content(); return }
+    val margin = with(LocalDensity.current) { EDGE.toPx() }
+    val spec = remember(margin) {
+        object : androidx.compose.foundation.gestures.BringIntoViewSpec {
+            override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+                val start = offset - margin                      // < 0: cut off at the start
+                val end = offset + size - (containerSize - margin) // > 0: cut off at the end
+                return when {
+                    start >= 0f && end <= 0f -> 0f              // fully in view: stay put
+                    start < 0f && end > 0f -> 0f                // wider than the room: leave it
+                    kotlin.math.abs(start) < kotlin.math.abs(end) -> start
+                    else -> end
+                }
+            }
+        }
+    }
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec, content = content,
+    )
+}
