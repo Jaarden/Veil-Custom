@@ -226,7 +226,7 @@ Guide them through, and confirm each works:
    to be closed and reopened, because it stays stuck after that error).
 9. **Request** (only with a Seerr server): the **Request** button next to *veil* opens the screen. Check
    trending loads, the Movies / TV shows, Popular / Latest, streaming-service and *In my library* filters,
-   **More** (36 titles at a time), a title's details window (description, genres, cast, scores) with the
+   that more titles load by themselves when scrolling to the bottom (36 at a time), a title's details window (description, genres, cast, scores) with the
    actions on its right, and **Choose seasons…** on a show. Don't press a request button while testing
    unless the person agrees: it creates a real request.
 10. **Home double press** (optional): two quick presses of the remote's Home button should show the TV's
